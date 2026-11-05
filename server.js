@@ -38,12 +38,12 @@ const OUTFIT_STYLE = {
 };
 
 const TYPES = {
-  daigia: { name: 'Anh Đại Gia', likes: 'longlay', tip: 500, reqs: ['beer', 'cheers', 'fruit', 'dance', 'chat'], genre: 'Remix' },
+  daigia: { name: 'Anh Đại Gia', likes: 'longlay', tip: 500, reqs: ['beer', 'cheers', 'fruit', 'dance', 'chat', 'pole'], genre: 'Remix' },
   bolero: { name: 'Chú Bolero', likes: 'ngoanhien', tip: 250, reqs: ['song', 'duet', 'chat', 'water'], genre: 'Bolero' },
-  sep:    { name: 'Sếp Nhậu', likes: 'goicam', tip: 350, reqs: ['cheers', 'beer', 'water', 'chat', 'song'], genre: 'Nhạc trẻ' },
+  sep:    { name: 'Sếp Nhậu', likes: 'goicam', tip: 350, reqs: ['cheers', 'beer', 'water', 'chat', 'song', 'pole'], genre: 'Nhạc trẻ' },
   keo:    { name: 'Thanh Niên Keo Kiệt', likes: 'any', tip: 60, reqs: ['chat', 'song', 'water', 'duet'], genre: 'Rap' },
   oppa:   { name: 'Oppa Hàn Quốc', likes: 'ngoanhien', tip: 400, reqs: ['song', 'duet', 'dance', 'chat'], genre: 'K-pop' },
-  genz:   { name: 'Cậu Ấm Gen Z', likes: 'goicam', tip: 180, reqs: ['dance', 'song', 'chat', 'fruit'], genre: 'Nhạc trẻ' },
+  genz:   { name: 'Cậu Ấm Gen Z', likes: 'goicam', tip: 180, reqs: ['dance', 'song', 'chat', 'fruit', 'pole'], genre: 'Nhạc trẻ' },
 };
 
 const LINES = {
@@ -100,7 +100,7 @@ function newRequest(c) {
   const data = {};
   if (kind === 'song') data.genre = Math.random() < 0.75 ? T.genre : pick(GENRES);
   c.request = { kind, data };
-  c.maxPatience = (kind === 'fruit' || kind === 'water' ? 45 : 35) + (state.upgrades.loa ? 10 : 0);
+  c.maxPatience = (kind === 'fruit' || kind === 'water' || kind === 'pole' ? 45 : 35) + (state.upgrades.loa ? 10 : 0);
   c.patience = c.maxPatience;
 }
 
