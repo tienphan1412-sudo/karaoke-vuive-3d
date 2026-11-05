@@ -44,6 +44,19 @@ Thiếu file nào thì khu đó vẫn phát nhạc tự tạo. Mỗi file nên d
 
 **Không dùng bài hát của ca sĩ** (tải từ YouTube, Zing, Spotify…): game đưa lên mạng công khai nên vi phạm bản quyền, và clip quay game đăng TikTok/YouTube dễ bị tắt tiếng hoặc gỡ.
 
+## Tài khoản nhân vật (lưu tiến trình)
+Người chơi tạo nhân vật bằng **tên + mã PIN 4-6 số**. Tiền bo, bộ đồ, makeup, quỹ quán và nâng cấp quán đều được lưu. Hôm sau vào lại, dùng máy nào cũng chơi tiếp được.
+
+Để lưu vĩnh viễn cần một database MongoDB Atlas miễn phí:
+1. Đăng ký tại mongodb.com/cloud/atlas/register. Tạo cluster **Free (M0)**, chọn vùng **Singapore**.
+2. Tạo Database User (tên + mật khẩu, nên bấm Autogenerate để mật khẩu chỉ có chữ và số).
+3. Network Access → Add IP Address → **Allow access from anywhere** (0.0.0.0/0).
+4. Connect → Drivers → copy chuỗi `mongodb+srv://...`, thay `<db_password>` bằng mật khẩu ở bước 2.
+5. Trên Render: service → **Environment** → thêm biến `MONGODB_URI` = chuỗi vừa copy → Save, rebuild and deploy.
+6. Log của Render hiện "Đã kết nối MongoDB" là xong.
+
+Chưa cài database thì game vẫn chạy, nhưng tài khoản sẽ mất mỗi khi server khởi động lại (game hiện cảnh báo ⚠️).
+
 ## Đưa lên mạng (giống game đi chùa)
 1. Vào GitHub → **New repository** → đặt tên `ktv-lung-linh-3d` → Create.
 2. Bấm **uploading an existing file** → kéo thả **toàn bộ file và thư mục** trong file zip (không có `node_modules`) → Commit.
@@ -61,7 +74,8 @@ npm start
 Mở http://localhost:3000
 
 ## Cấu trúc
-- `server.js`: server online (khách, yêu cầu, tiền bo, quỹ quán, chat)
+- `server.js`: server online (khách, yêu cầu, tiền bo, quỹ quán, chat, tài khoản)
+- `store.js`: lưu tài khoản vào MongoDB
 - `public/js/avatar.js`: tải model VRM, may trang phục theo dáng người, vẽ makeup, phụ kiện, hoạt ảnh
 - `public/js/character.js`: dựng khách hàng nam (phong cách hài)
 - `public/models/`: các file model .vrm

@@ -3,6 +3,7 @@ const express = require('express');
 const http = require('http');
 const path = require('path');
 const { Server } = require('socket.io');
+const store = require('./store');
 
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
@@ -68,6 +69,9 @@ const UPGRADES = {
 };
 
 const state = { fund: 0, upgrades: {}, customers: {}, players: {} };
+let metaDirty = false;
+const loginFails = new Map();
+const liveCache = new Map(); // số liệu mới nhất của tài khoản (phòng khi DB chưa ghi xong)
 let nextId = 1;
 let spawnTimer = 2;
 
@@ -134,8 +138,8 @@ function finishCustomer(c) {
     if (ROOMS[c.roomId].vip) mult *= 1.5;
     if (state.upgrades.disco) mult *= 1.15;
     const tip = Math.max(10, Math.round((T.tip * (0.4 + c.mood / 100) * mult) / 10) * 10);
-    p.money += tip;
-    state.fund += Math.round(tip * 0.3);
+    p.money += tip; p.served = (p.served || 0) + 1; p.dirty = true;
+    state.fund += Math.round(tip * 0.3); metaDirty = true;
     io.emit('tip', { pid: p.id, name: p.name, amount: tip, cname: T.name, final: true, liked, ctype: c.type });
     emitState();
   }
@@ -189,9 +193,68 @@ function sanitizeApp(a) {
 
 // ---------------- Kết nối người chơi ----------------
 io.on('connection', (socket) => {
+  // ---------- tài khoản ----------
+  const fails = (key) => loginFails.get(key) || { n: 0, until: 0 };
+  async function signIn(acc, withToken) {
+    // đá phiên cũ nếu tài khoản đang mở ở máy khác
+    for (const [sid, p] of Object.entries(state.players)) {
+      if (p.key === acc.key && sid !== socket.id) {
+        liveCache.set(p.key, { money: p.money, served: p.served || 0, app: p.app });
+        const old = io.sockets.sockets.get(sid);
+        if (old) { old.emit('kicked', 'Tài khoản này vừa đăng nhập ở nơi khác'); old.disconnect(true); }
+      }
+    }
+    const live = liveCache.get(acc.key);
+    if (live) Object.assign(acc, live);
+    socket.data.acc = acc;
+    const token = withToken ? await store.addToken(acc) : null;
+    return { ok: true, name: acc.name, money: acc.money, served: acc.served || 0, app: acc.app, token, saveMode: store.mode };
+  }
+  const NAME_RE = /^[\p{L}\p{N} _.-]{2,16}$/u;
+  socket.on('register', async ({ name, pin } = {}, cb = () => {}) => {
+    try {
+      name = String(name || '').trim().replace(/\s+/g, ' ');
+      if (!NAME_RE.test(name)) return cb({ ok: false, error: 'Tên dài 2-16 ký tự, chỉ gồm chữ, số, khoảng trắng' });
+      if (!/^\d{4,6}$/.test(String(pin || ''))) return cb({ ok: false, error: 'Mã PIN gồm 4-6 chữ số' });
+      const acc = await store.createAccount(name, pin);
+      if (!acc) return cb({ ok: false, error: 'Tên này đã có người dùng, chọn tên khác nha' });
+      cb(await signIn(acc, true));
+    } catch (e) { console.error(e); cb({ ok: false, error: 'Lỗi máy chủ, thử lại sau' }); }
+  });
+  socket.on('login', async ({ name, pin } = {}, cb = () => {}) => {
+    try {
+      const acc = await store.getAccount(String(name || ''));
+      const key = acc ? acc.key : String(name || '').toLowerCase();
+      const f = fails(key);
+      if (f.until > Date.now()) return cb({ ok: false, error: 'Sai PIN nhiều lần, đợi 5 phút rồi thử lại' });
+      if (!acc) return cb({ ok: false, error: 'Chưa có nhân vật tên này. Bấm "Tạo nhân vật mới" nha' });
+      if (!store.checkPin(acc, String(pin || ''))) {
+        f.n++; if (f.n >= 5) { f.until = Date.now() + 5 * 60000; f.n = 0; }
+        loginFails.set(key, f);
+        return cb({ ok: false, error: 'Sai mã PIN' });
+      }
+      loginFails.delete(key);
+      cb(await signIn(acc, true));
+    } catch (e) { console.error(e); cb({ ok: false, error: 'Lỗi máy chủ, thử lại sau' }); }
+  });
+  socket.on('resume', async ({ name, token } = {}, cb = () => {}) => {
+    try {
+      const acc = await store.getAccount(String(name || ''));
+      if (!acc || !token || !(acc.tokens || []).includes(token)) return cb({ ok: false });
+      cb(await signIn(acc, false));
+    } catch (e) { cb({ ok: false }); }
+  });
+  socket.on('logout', async ({ token } = {}) => {
+    const acc = socket.data.acc;
+    if (acc && token) { acc.tokens = (acc.tokens || []).filter((t) => t !== token); await store.saveAccount(acc.key, { tokens: acc.tokens }); }
+  });
+
   socket.on('join', (msg = {}) => {
-    const name = String(msg.name || 'Bé Xinh').trim().slice(0, 16) || 'Bé Xinh';
-    const p = { id: socket.id, name, app: sanitizeApp(msg.app), x: 0, z: 3, ry: Math.PI, anim: 'idle', holding: null, money: 0 };
+    const acc = socket.data.acc;
+    if (!acc) return socket.emit('needLogin');
+    if (state.players[socket.id]) return;
+    const app = sanitizeApp(msg.app);
+    const p = { id: socket.id, key: acc.key, name: acc.name, app, x: 0, z: 3, ry: Math.PI, anim: 'idle', holding: null, money: acc.money || 0, served: acc.served || 0, dirty: true };
     state.players[socket.id] = p;
     socket.emit('init', {
       you: socket.id,
@@ -202,8 +265,10 @@ io.on('connection', (socket) => {
       upgradeDefs: UPGRADES,
     });
     socket.broadcast.emit('playerJoined', p);
-    io.emit('feed', `${name} vừa vào ca 💃`);
+    io.emit('feed', `${p.name} vừa vào ca 💃`);
   });
+
+  socket.on('top', async (cb = () => {}) => { try { cb(await store.topAccounts(10)); } catch (e) { cb([]); } });
 
   socket.on('move', (m = {}) => {
     const p = state.players[socket.id];
@@ -219,6 +284,7 @@ io.on('connection', (socket) => {
     const p = state.players[socket.id];
     if (!p) return;
     p.app = sanitizeApp(a);
+    p.dirty = true;
     socket.broadcast.emit('appearance', { id: socket.id, app: p.app });
   });
 
@@ -253,8 +319,8 @@ io.on('connection', (socket) => {
     const T = TYPES[c.type];
     if (q >= 0.85) {
       const hot = Math.max(10, Math.round((T.tip * 0.1) / 10) * 10);
-      p.money += hot;
-      state.fund += Math.round(hot * 0.3);
+      p.money += hot; p.dirty = true;
+      state.fund += Math.round(hot * 0.3); metaDirty = true;
       io.emit('tip', { pid: p.id, name: p.name, amount: hot, cname: T.name, final: false, ctype: c.type });
       emitState();
     }
@@ -277,6 +343,7 @@ io.on('connection', (socket) => {
     if (!p || !u || state.upgrades[key] || state.fund < u.cost) return;
     state.fund -= u.cost;
     state.upgrades[key] = true;
+    metaDirty = true;
     emitState();
     io.emit('feed', `${p.name} đã mua "${u.name}" cho quán 🎉`);
   });
@@ -294,10 +361,31 @@ io.on('connection', (socket) => {
     for (const c of Object.values(state.customers)) {
       if (c.servedBy === socket.id) { c.servedBy = null; c.servedName = null; }
     }
+    savePlayer(p);
     delete state.players[socket.id];
     io.emit('playerLeft', { id: socket.id });
     io.emit('feed', `${p.name} đã tan ca 👋`);
   });
 });
 
-server.listen(PORT, () => console.log(`KTV Lung Linh 3D đang chạy ở cổng ${PORT}`));
+// ---------------- Lưu dữ liệu ----------------
+function savePlayer(p) {
+  if (!p.key) return Promise.resolve();
+  p.dirty = false;
+  liveCache.set(p.key, { money: p.money, served: p.served || 0, app: p.app });
+  return store.saveAccount(p.key, { money: p.money, served: p.served || 0, app: p.app }).catch((e) => console.error('Lưu lỗi:', e.message));
+}
+async function saveAll() {
+  const jobs = Object.values(state.players).filter((p) => p.dirty).map(savePlayer);
+  if (metaDirty) { metaDirty = false; jobs.push(store.saveMeta(state.fund, state.upgrades).catch((e) => console.error(e.message))); }
+  await Promise.all(jobs);
+}
+setInterval(saveAll, 5000);
+for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, async () => { console.log('Đang lưu trước khi tắt...'); await saveAll(); process.exit(0); });
+
+(async () => {
+  await store.init();
+  const m = await store.loadMeta();
+  state.fund = m.fund || 0; state.upgrades = m.upgrades || {};
+  server.listen(PORT, () => console.log(`KTV Lung Linh 3D đang chạy ở cổng ${PORT}`));
+})();
