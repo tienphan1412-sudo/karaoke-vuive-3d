@@ -939,14 +939,26 @@ let ghenCamUntil = 0;
 const ghenCamOn = () => ghenFx && serverNow() < ghenCamUntil && camMode === 'play';
 const flying = [];
 function startGhenFx(ev) {
-  if (ghenFx) scene.remove(ghenFx.npc.group);
+  if (ghenFx) { scene.remove(ghenFx.npc.group); scene.remove(ghenFx.label.sprite); }
   const npc = createNPC('wife'); scene.add(npc.group);
-  ghenFx = { ev, npc };
+  // bảng tên đỏ trên đầu bà vợ cho dễ nhận ra
+  const c = customers.get(ev.cid);
+  const who = c ? D.CUSTOMER_TYPES[c.data.type]?.name : '';
+  const label = makeLabel(640, 110, 0.95);
+  { const { ctx, w } = label; ctx.font = 'bold 50px "Be Vietnam Pro", sans-serif';
+    const text = '😡 Vợ ' + (who || 'của khách');
+    const tw = ctx.measureText(text).width + 50;
+    ctx.fillStyle = 'rgba(213,0,0,0.92)'; roundRect(ctx, (w - tw) / 2, 12, tw, 80, 36); ctx.fill();
+    ctx.strokeStyle = '#ffeb3b'; ctx.lineWidth = 5; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, w / 2, 54);
+    label.tex.needsUpdate = true; }
+  scene.add(label.sprite);
+  ghenFx = { ev, npc, label };
 }
 let ghenChoiceEid = null, ghenChoiceTimer = null;
 function endGhenFx(d) {
   if (d && ghenFx && d.id !== ghenFx.ev.id) return; // tín hiệu cũ đến trễ, bỏ qua
-  if (ghenFx) { scene.remove(ghenFx.npc.group); ghenFx = null; }
+  if (ghenFx) { scene.remove(ghenFx.npc.group); scene.remove(ghenFx.label.sprite); ghenFx = null; }
   if (!d || ghenChoiceEid === d.id) { $('#ghenModal').classList.remove('show'); clearInterval(ghenChoiceTimer); if (me.busy && !isMinigameOpen()) me.busy = false; }
 }
 socket.on('ghen', (ev) => { startGhenFx(ev); sfx('ghen'); toast('😱 <b>VỢ KHÁCH TỚI ĐÁNH GHEN!!!</b> Coi chừng dép tổ ong!'); });
@@ -1008,6 +1020,7 @@ function updateGhen(t) {
     dir = st ? Math.atan2(st.x - pos.x, st.z - pos.z) : 0;
   }
   npc.group.position.set(pos.x, 0, pos.z); npc.group.rotation.y = dir;
+  ghenFx.label.sprite.position.set(pos.x, 2.25 + Math.abs(Math.sin(t * 6)) * 0.06, pos.z);
   npc.animate(t, mode, moving);
 }
 
