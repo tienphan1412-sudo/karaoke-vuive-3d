@@ -391,12 +391,16 @@ function refreshStyleBadges() {
   const s = styleOf(app);
   for (const el of [$('#styleBadge'), $('#myStyle')]) { el.className = 'badge ' + s; el.textContent = 'Phong cách: ' + D.STYLE_NAMES[s]; }
 }
+let topAll = [];
+function loadTop() { if (joined) socket.emit('top', (list) => { topAll = Array.isArray(list) ? list : []; refreshHUD(); }); }
+setInterval(loadTop, 30000);
 function refreshHUD() {
   $('#myMoney').textContent = D.fmtMoney(myMoney);
   $('#fund').textContent = D.fmtMoney(gameState.fund);
   const rows = [{ name: myName, money: myMoney, me: true }, ...[...players.values()].map((p) => ({ name: p.name, money: p.money }))]
     .sort((a, b) => b.money - a.money).slice(0, 6);
-  $('#board').innerHTML = '<h4>🏆 Bảng tiền bo</h4>' + rows.map((r, i) => `<div class="${r.me ? 'me' : ''}"><span>${i + 1}. ${escapeHtml(r.name)}</span><span>${D.fmtMoney(r.money)}</span></div>`).join('');
+  $('#board').innerHTML = '<h4>🏆 Đang trong ca</h4>' + rows.map((r, i) => `<div class="${r.me ? 'me' : ''}"><span>${i + 1}. ${escapeHtml(r.name)}</span><span>${D.fmtMoney(r.money)}</span></div>`).join('')
+    + (topAll.length ? '<h4 class="top">👑 Top mọi thời đại</h4>' + topAll.slice(0, 5).map((r, i) => `<div class="${r.name === myName ? 'me' : ''}"><span>${i + 1}. ${escapeHtml(r.name)}</span><span>${D.fmtMoney(r.money)}</span></div>`).join('') : '');
 }
 function refreshShop() {
   $('#shopList').innerHTML = Object.entries(upgradeDefs).map(([k, u]) => {
@@ -550,29 +554,84 @@ $('#btnDone').addEventListener('click', () => {
   if (!joined) join();
 });
 
-// ================= Start screen =================
-$('#nameInput').value = myName;
-$('#btnCreate').disabled = true;
-Promise.resolve(me.char.ready).then(() => {
-  $('#loadMsg').textContent = me.char.failed ? 'Không tải được model nhân vật 😢 (kiểm tra thư mục public/models)' : 'Nhân vật đã sẵn sàng ✨';
-  $('#btnCreate').disabled = false;
-});
-$('#btnCreate').addEventListener('click', () => {
+// ================= Đăng nhập =================
+const socket = io();
+let auth = store.get('ktv_auth', null); // { name, token }
+let authMode = 'login';
+function setAuthMode(m) {
+  authMode = m;
+  document.querySelectorAll('.auth-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
+  $('#btnAuth').textContent = m === 'login' ? 'Đăng nhập' : 'Tạo nhân vật ✨';
+  $('#pinHint').classList.toggle('hidden', m !== 'register');
+  $('#authMsg').textContent = '';
+}
+document.querySelectorAll('.auth-tabs button').forEach((b) => b.addEventListener('click', () => setAuthMode(b.dataset.mode)));
+function showAuth(msg = '') {
+  $('#resumeBox').classList.add('hidden'); $('#authBox').classList.remove('hidden');
+  if (auth && auth.name) $('#nameInput').value = auth.name;
+  $('#authMsg').textContent = msg;
+}
+function showStart(msg = '') {
+  $('#start').classList.add('show'); $('#hud').classList.add('hidden'); $('#creator').classList.remove('show');
+  if (auth && auth.token && !msg) { $('#resumeBox').classList.remove('hidden'); $('#authBox').classList.add('hidden'); $('#resumeName').textContent = auth.name; }
+  else showAuth(msg);
+}
+const emitP = (ev, data) => new Promise((res) => socket.timeout(15000).emit(ev, data, (err, r) => res(err ? { ok: false, error: 'Mất kết nối máy chủ, thử lại nha' } : r)));
+function busy(on) { for (const id of ['#btnAuth', '#btnResume']) $(id).disabled = on; $('#loadMsg').textContent = on ? 'Đang kết nối quán... (lần đầu có thể mất 30-60 giây)' : ''; }
+
+function afterLogin(r) {
+  myName = r.name;
+  if (r.token) { auth = { name: r.name, token: r.token }; store.set('ktv_auth', auth); }
   initMusic();
-  myName = $('#nameInput').value.trim() || 'Bé Xinh';
-  store.set('ktv_name', myName);
   $('#start').classList.remove('show');
-  openCreator();
+  if (r.saveMode !== 'mongo') setTimeout(() => toast('⚠️ Máy chủ chưa nối database: tiền bo sẽ mất khi server khởi động lại'), 1500);
+  if (r.app) {
+    app = VALID_OUTFIT({ ...DEFAULT, ...r.app });
+    me.char.update(app); store.set('ktv_app_khoi', app);
+    join();
+    setTimeout(() => toast(`Mừng <b>${escapeHtml(r.name)}</b> quay lại! Tiền bo đang có: <b>${D.fmtMoney(r.money || 0)}</b>`), 600);
+  } else openCreator(); // nhân vật mới: vào tủ đồ trước
+}
+$('#btnAuth').addEventListener('click', async () => {
+  const name = $('#nameInput').value.trim(), pin = $('#pinInput').value.trim();
+  if (!name) return ($('#authMsg').textContent = 'Nhập tên nhân vật nha');
+  if (!/^\d{4,6}$/.test(pin)) return ($('#authMsg').textContent = 'Mã PIN gồm 4-6 chữ số');
+  busy(true);
+  const r = await emitP(authMode === 'login' ? 'login' : 'register', { name, pin });
+  busy(false);
+  if (!r.ok) return ($('#authMsg').textContent = r.error || 'Có lỗi, thử lại nha');
+  $('#pinInput').value = '';
+  afterLogin(r);
 });
-$('#nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#btnCreate').click(); });
+for (const id of ['#nameInput', '#pinInput']) $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#btnAuth').click(); });
+$('#btnResume').addEventListener('click', async () => {
+  busy(true);
+  const r = await emitP('resume', auth);
+  busy(false);
+  if (!r.ok) { setAuthMode('login'); return showAuth('Phiên đăng nhập đã hết, nhập lại mã PIN nha'); }
+  afterLogin(r);
+});
+$('#btnSwitch').addEventListener('click', () => { setAuthMode('login'); showAuth(); $('#nameInput').value = ''; });
+$('#btnLogout').addEventListener('click', () => {
+  if (auth) socket.emit('logout', { token: auth.token });
+  auth = null; store.set('ktv_auth', null);
+  location.reload();
+});
+setAuthMode(auth ? 'login' : 'register');
+showStart();
 
 // ================= Networking =================
-const socket = io();
 function join() {
-  socket.emit('join', { name: myName, app });
+  socket.emit('join', { app });
   drawNameLabel(myLabel, myName, 0, true);
 }
-socket.on('connect', () => { if (joined) join(); });
+socket.on('connect', async () => {
+  if (!joined) return;
+  const r = auth ? await emitP('resume', auth) : { ok: false };
+  if (r.ok) join(); else { joined = false; showStart('Mất kết nối, đăng nhập lại nha'); }
+});
+socket.on('needLogin', () => { joined = false; showStart('Đăng nhập lại nha'); });
+socket.on('kicked', (msg) => { joined = false; auth && store.set('ktv_auth', auth); showStart(msg); });
 socket.on('init', (d) => {
   myId = d.you; joined = true;
   gameState = { fund: d.fund, upgrades: d.upgrades }; upgradeDefs = d.upgradeDefs;
@@ -583,7 +642,8 @@ socket.on('init', (d) => {
   syncCustomers(d.customers);
   refreshHUD(); refreshStyleBadges();
   $('#hud').classList.remove('hidden');
-  toast(`Chào <b>${escapeHtml(myName)}</b>! Khách sắp tới, chuẩn bị nha 💃`);
+  loadTop();
+  if (!d.players[myId] || !d.players[myId].money) toast(`Chào <b>${escapeHtml(myName)}</b>! Khách sắp tới, chuẩn bị nha 💃`);
 });
 function addPlayer(p) {
   if (players.has(p.id)) removePlayer(p.id);
