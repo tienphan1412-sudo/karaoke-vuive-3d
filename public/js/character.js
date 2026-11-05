@@ -440,7 +440,7 @@ export function createGirl(app) {
   }
 
   update(app);
-  return { group, body, update, animate, setHolding, get app() { return current; } };
+  return { group, body, update, animate, setHolding, headY: 1.47, topY: 1.75, get app() { return current; } };
 }
 
 // ======================= KHÁCH HÀNG =======================

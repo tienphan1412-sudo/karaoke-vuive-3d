@@ -2,49 +2,41 @@
 
 export const STYLE_NAMES = { longlay: 'Lộng lẫy', goicam: 'Gợi cảm', ngoanhien: 'Ngoan hiền' };
 
-// Model nhân vật (VRM từ VRoid Studio). Thêm model mới: bỏ file .vrm vào public/models rồi thêm 1 dòng ở đây.
-export const BASES = [
-  { id: 'base', name: 'Bé Xinh (mẫu pixiv)', file: '/models/base.vrm' },
+export const OUTFITS = [
+  { id: 'duoica', name: 'Đầm dạ hội đuôi cá', style: 'longlay', sparkle: true, cover: { torso: 1, chest: 1, shoulder: 0, upper: 0, fore: 0 }, skirt: 'mermaid' },
+  { id: 'congchua', name: 'Đầm công chúa', style: 'longlay', sparkle: true, cover: { torso: 1, chest: 1, shoulder: 1, upper: 0, fore: 0 }, skirt: 'ball' },
+  { id: 'bodycon', name: 'Váy ôm body', style: 'goicam', cover: { torso: 1, chest: 1, shoulder: 0, upper: 0, fore: 0 }, skirt: 'tight' },
+  { id: 'haiday', name: 'Đầm hai dây xòe', style: 'goicam', cover: { torso: 1, chest: 1, shoulder: 0, upper: 0, fore: 0 }, skirt: 'aline' },
+  { id: 'aodai', name: 'Áo dài', style: 'ngoanhien', cover: { torso: 1, chest: 1, shoulder: 1, upper: 1, fore: 1 }, pants: '#fafafa', flaps: true, collar: true },
+  { id: 'cardigan', name: 'Cardigan + váy xếp ly', style: 'ngoanhien', cover: { torso: 1, chest: 1, shoulder: 1, upper: 1, fore: 1 }, skirt: 'pleat' },
 ];
 
-export const OUTFITS = [
-  { id: 'xetaa', name: 'Đầm dạ hội cúp ngực xẻ tà', style: 'longlay', finish: 'sequin' },
-  { id: 'xoe', name: 'Đầm xòe trễ vai', style: 'longlay', finish: 'satin' },
-  { id: 'mermaid', name: 'Đầm đuôi cá cúp ngực', style: 'longlay', finish: 'metal' },
-  { id: 'body', name: 'Đầm body cúp ngực', style: 'goicam', finish: 'latex' },
-  { id: 'crop', name: 'Áo ống + váy xếp ly ngắn', style: 'goicam', finish: 'satin' },
-  { id: 'babydoll', name: 'Váy babydoll tay phồng', style: 'ngoanhien', finish: 'satin' },
-  { id: 'blazer', name: 'Blazer + chân váy bút chì', style: 'ngoanhien', finish: 'velvet' },
-  { id: 'casual', name: 'Áo phông + quần short (gốc)', style: 'ngoanhien' },
+export const OUTFIT_COLORS = ['#c2185b', '#e53935', '#8e24aa', '#3949ab', '#1e88e5', '#00897b', '#f8bbd0', '#fff59d', '#f5f5f5', '#212121', '#d4af37', '#b3e5fc'];
+export const SHOE_COLORS = ['#212121', '#f5f5f5', '#c62828', '#d4af37', '#f8bbd0', '#6d4c41'];
+export const SKIN = ['#ffe3d3', '#f8d5bd', '#eebd9a', '#d9a07a', '#b97e57'];
+export const HAIR_COLORS = ['#1a1110', '#3b2219', '#6b3e26', '#a0522d', '#d8b26e', '#f2d8a7', '#8e44ad', '#e91e63', '#cfd8dc'];
+export const HAIR_STYLES = [
+  { id: 'long', name: 'Xõa dài' }, { id: 'wave', name: 'Xoăn sóng' }, { id: 'pony', name: 'Đuôi ngựa' },
+  { id: 'twin', name: 'Hai bím' }, { id: 'bob', name: 'Tóc bob' }, { id: 'bun', name: 'Búi cao' },
 ];
-export const FINISHES = [
-  { id: 'sequin', name: 'Kim sa lấp lánh ✨' }, { id: 'satin', name: 'Lụa satin' }, { id: 'metal', name: 'Nhũ kim loại' },
-  { id: 'latex', name: 'Da bóng' }, { id: 'velvet', name: 'Nhung' },
-];
-export const STOCKINGS = [
-  { id: 'none', name: 'Không' }, { id: 'sheer', name: 'Tất da đen' }, { id: 'fishnet', name: 'Tất lưới' }, { id: 'thigh', name: 'Tất đùi trắng' },
-];
-export const OUTFIT_COLORS = ['#c2185b', '#e53935', '#7b1fa2', '#283593', '#1e88e5', '#00897b', '#f8bbd0', '#ffe0b2', '#fafafa', '#1a1a1a', '#d4af37', '#c0c0c0', '#b3e5fc', '#ff7043'];
-export const SHOE_COLORS = ['original', '#111111', '#fafafa', '#c62828', '#d4af37', '#c0c0c0', '#f8bbd0'];
-export const SKIN = ['#ffffff', '#fff1e8', '#f6dcc8', '#e2b896', '#c9946c'];
-export const HAIR_COLORS = ['original', '#fafafa', '#e8e0d8', '#f2d8a7', '#d8a35c', '#8e3b2f', '#1a1110', '#f48fb1', '#ff8a65', '#b39ddb', '#80cbc4', '#90caf9'];
-export const EYE_COLORS = ['original', '#7a4a2a', '#c62828', '#ffb300', '#1e88e5', '#4dd0e1', '#43a047', '#8e24aa', '#f48fb1', '#90a4ae'];
-export const SHADOW_COLORS = ['none', '#e57399', '#c58fdc', '#f3a76b', '#b07a5e', '#d4af37', '#e53935', '#5c6bc0', '#3a2a30'];
-export const LIP_COLORS = ['#e05a6b', '#d81b60', '#b71c1c', '#ff6f91', '#ff8a65', '#a8545d', '#8e1d4f', '#f4a3a8'];
-export const BLUSH_COLORS = ['none', '#f7a1b5', '#ff8a80', '#ffab91', '#e1a3e6'];
-export const LINER = [{ id: 'none', name: 'Tự nhiên' }, { id: 'cat', name: 'Mắt mèo' }, { id: 'smoky', name: 'Khói (smoky)' }];
-export const LINER_COLORS = ['#1a1012', '#4e2a1e', '#7b1fa2', '#c2185b'];
-export const EARRINGS = [{ id: 'none', name: 'Không' }, { id: 'pearl', name: 'Ngọc trai' }, { id: 'hoop', name: 'Khoen vàng' }, { id: 'drop', name: 'Pha lê dài' }];
-export const CLIPS = [{ id: 'none', name: 'Không' }, { id: 'bow', name: 'Nơ đỏ' }, { id: 'crown', name: 'Vương miện' }, { id: 'fox', name: 'Tai cáo' }, { id: 'cat', name: 'Tai mèo' }];
-export const NECKLACES = [{ id: 'none', name: 'Không' }, { id: 'pearl', name: 'Chuỗi ngọc' }, { id: 'diamond', name: 'Kim cương' }, { id: 'choker', name: 'Choker' }];
+export const EYE_COLORS = ['#3e2723', '#6d4c41', '#1565c0', '#2e7d32', '#6a1b9a', '#c62828', '#546e7a'];
+export const SHADOW_COLORS = ['none', '#f48fb1', '#ce93d8', '#ffcc80', '#a1887f', '#90caf9', '#d4af37', '#ef5350'];
+export const LIP_COLORS = ['#e57373', '#d81b60', '#b71c1c', '#f06292', '#ff8a65', '#8d6e63', '#ad1457', '#ffab91'];
+export const BLUSH_COLORS = ['none', '#f8a5b8', '#ff8a80', '#ffab91', '#e1bee7'];
+export const LINER = [{ id: 'none', name: 'Không' }, { id: 'thin', name: 'Mảnh' }, { id: 'cat', name: 'Mắt mèo' }, { id: 'bold', name: 'Đậm' }];
+export const LASHES = [{ id: 'natural', name: 'Tự nhiên' }, { id: 'doll', name: 'Búp bê' }, { id: 'drama', name: 'Dày cong' }];
+export const BROWS = [{ id: 'thin', name: 'Mảnh' }, { id: 'natural', name: 'Tự nhiên' }, { id: 'straight', name: 'Ngang Hàn' }, { id: 'arched', name: 'Cong sắc' }];
+export const EARRINGS = [{ id: 'none', name: 'Không' }, { id: 'pearl', name: 'Ngọc trai' }, { id: 'hoop', name: 'Khoen tròn' }, { id: 'drop', name: 'Dài lấp lánh' }];
+export const CLIPS = [{ id: 'none', name: 'Không' }, { id: 'bow', name: 'Nơ' }, { id: 'flower', name: 'Kẹp hoa' }, { id: 'crown', name: 'Vương miện' }];
+export const GLASSES = [{ id: 'none', name: 'Không' }, { id: 'round', name: 'Kính tròn' }, { id: 'cat', name: 'Kính mắt mèo' }];
+export const NECKLACES = [{ id: 'none', name: 'Không' }, { id: 'pearl', name: 'Chuỗi ngọc' }, { id: 'choker', name: 'Choker' }];
 
 export const DEFAULT_APP = {
-  base: 'base', skin: '#ffffff', height: 1,
-  outfit: 'xetaa', outfitColor: '#c2185b', finish: 'sequin', stockings: 'none', shoes: '#111111', skirtColor: '#1a1a1a',
-  hairColor: 'original', eyeColor: 'original',
-  shadow: '#e57399', shadowAmt: 0.6, liner: 'cat', linerColor: '#1a1012',
-  blush: '#f7a1b5', blushAmt: 0.6, lip: '#d81b60', lipAmt: 0.85, gloss: true,
-  earrings: 'drop', clip: 'none', necklace: 'diamond',
+  skin: SKIN[0], height: 1, outfit: 'duoica', outfitColor: '#c2185b', shoes: '#212121',
+  hair: 'long', hairColor: '#1a1110',
+  eyeColor: '#6d4c41', shadow: '#f48fb1', shadowAmt: 0.6, liner: 'thin', lashes: 'doll', brows: 'natural',
+  blush: '#f8a5b8', lip: '#d81b60', gloss: true,
+  earrings: 'pearl', clip: 'none', glasses: 'none', necklace: 'none',
 };
 
 // Nhạc nền theo khu vực. Có file mp3 trong public/music thì phát file, không có thì game tự chơi nhạc tổng hợp theo "style".

@@ -1,6 +1,5 @@
 import * as THREE from 'three';
-import { createCustomer, makeLabel, roundRect } from './character.js';
-import { createGirl, setRenderer, preloadModel } from './avatar.js';
+import { createGirl, createCustomer, makeLabel, roundRect } from './character.js';
 import { buildWorld, seatTransform, BAR, MIRROR, ROOM_DEFS } from './world.js';
 import { runMinigame, isMinigameOpen } from './minigames.js';
 import * as D from './data.js';
@@ -22,7 +21,6 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 $('#game').appendChild(renderer.domElement);
-setRenderer(renderer);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#120818');
 scene.fog = new THREE.Fog('#120818', 28, 60);
@@ -38,7 +36,7 @@ const isMobile = matchMedia('(max-width: 800px), (pointer: coarse)').matches;
 // ================= State =================
 const DEFAULT = { ...D.DEFAULT_APP };
 const VALID_OUTFIT = (a) => (D.OUTFITS.some((o) => o.id === a.outfit) ? a : { ...a, outfit: DEFAULT.outfit });
-let app = VALID_OUTFIT({ ...DEFAULT, ...store.get('ktv_app2', {}) });
+let app = VALID_OUTFIT({ ...DEFAULT, ...store.get('ktv_app_khoi', {}) });
 let myName = store.get('ktv_name', '');
 let myId = null, joined = false, myMoney = 0;
 let gameState = { fund: 0, upgrades: {} };
@@ -64,14 +62,14 @@ function updateCamera(dt) {
     const rx = Math.cos(me.ry), rz = -Math.sin(me.ry);
     const hy = (me.char.headY || 1.4) * h;
     if (creatorView === 'face') {
-      target = new THREE.Vector3(me.x, hy - 0.02, me.z);
-      pos = new THREE.Vector3(me.x + fx * 0.52, hy - 0.01, me.z + fz * 0.52);
+      target = new THREE.Vector3(me.x, hy - 0.01, me.z);
+      pos = new THREE.Vector3(me.x + fx * 0.62, hy + 0.01, me.z + fz * 0.62);
       if (!isMobile) { target.addScaledVector(new THREE.Vector3(rx, 0, rz), 0.1); pos.addScaledVector(new THREE.Vector3(rx, 0, rz), 0.1); }
       else { target.y -= 0.12; pos.y -= 0.08; }
     } else {
       const d = isMobile ? 3.6 : 2.8;
-      target = new THREE.Vector3(me.x, 0.78 * h, me.z);
-      pos = new THREE.Vector3(me.x + fx * d, 1.0 * h, me.z + fz * d);
+      target = new THREE.Vector3(me.x, 0.88 * h, me.z);
+      pos = new THREE.Vector3(me.x + fx * d, 1.15 * h, me.z + fz * d);
       if (!isMobile) { target.addScaledVector(new THREE.Vector3(rx, 0, rz), 0.55); pos.addScaledVector(new THREE.Vector3(rx, 0, rz), 0.55); }
       else { target.y -= 0.7; pos.y -= 0.1; }
     }
@@ -449,44 +447,41 @@ const CREATOR = [
   { tab: 'Trang phục', items: [
     { key: 'outfit', label: 'Kiểu đồ', type: 'cards', options: D.OUTFITS.map((o) => ({ id: o.id, name: o.name, style: o.style })) },
     { key: 'outfitColor', label: 'Màu đồ', type: 'swatch', options: D.OUTFIT_COLORS },
-    { key: 'finish', label: 'Chất vải', type: 'opts', options: D.FINISHES },
-    { key: 'stockings', label: 'Tất', type: 'opts', options: D.STOCKINGS },
-    { key: 'shoes', label: 'Giày', type: 'swatch', options: D.SHOE_COLORS },
-    { key: 'skirtColor', label: 'Màu chân váy (bộ blazer)', type: 'swatch', options: D.OUTFIT_COLORS },
+    { key: 'shoes', label: 'Giày cao gót', type: 'swatch', options: D.SHOE_COLORS },
   ] },
   { tab: 'Dáng người', items: [
-    { key: 'base', label: 'Gương mặt & kiểu tóc', type: 'opts', options: D.BASES },
-    { key: 'skin', label: 'Tông da', type: 'swatch', options: D.SKIN },
-    { key: 'height', label: 'Chiều cao', type: 'range', min: 0.94, max: 1.08, step: 0.01, fmt: (v) => Math.round(160 * v) + ' cm' },
+    { key: 'skin', label: 'Màu da', type: 'swatch', options: D.SKIN },
+    { key: 'height', label: 'Chiều cao', type: 'range', min: 0.94, max: 1.06, step: 0.01, fmt: (v) => Math.round(158 * v) + ' cm' },
   ] },
   { tab: 'Tóc', items: [
-    { key: 'hairColor', label: 'Màu tóc (Gốc = màu sẵn của model)', type: 'swatch', options: D.HAIR_COLORS },
+    { key: 'hair', label: 'Kiểu tóc', type: 'opts', options: D.HAIR_STYLES },
+    { key: 'hairColor', label: 'Màu tóc', type: 'swatch', options: D.HAIR_COLORS },
   ] },
   { tab: 'Mắt', face: true, items: [
     { key: 'eyeColor', label: 'Màu lens', type: 'swatch', options: D.EYE_COLORS },
     { key: 'shadow', label: 'Phấn mắt', type: 'swatch', options: D.SHADOW_COLORS },
-    { key: 'shadowAmt', label: 'Độ đậm phấn mắt', type: 'range', min: 0.1, max: 1, step: 0.05, fmt: (v) => Math.round(v * 100) + '%' },
+    { key: 'shadowAmt', label: 'Độ đậm phấn mắt', type: 'range', min: 0.2, max: 1, step: 0.05, fmt: (v) => Math.round(v * 100) + '%' },
     { key: 'liner', label: 'Kẻ mắt', type: 'opts', options: D.LINER },
-    { key: 'linerColor', label: 'Màu kẻ mắt', type: 'swatch', options: D.LINER_COLORS },
+    { key: 'lashes', label: 'Lông mi', type: 'opts', options: D.LASHES },
+    { key: 'brows', label: 'Chân mày', type: 'opts', options: D.BROWS },
   ] },
   { tab: 'Môi & má', face: true, items: [
     { key: 'lip', label: 'Màu son', type: 'swatch', options: D.LIP_COLORS },
-    { key: 'lipAmt', label: 'Độ đậm son', type: 'range', min: 0.2, max: 1, step: 0.05, fmt: (v) => Math.round(v * 100) + '%' },
     { key: 'gloss', label: 'Chất son', type: 'opts', options: [{ id: true, name: 'Bóng ✨' }, { id: false, name: 'Lì' }] },
     { key: 'blush', label: 'Má hồng', type: 'swatch', options: D.BLUSH_COLORS },
-    { key: 'blushAmt', label: 'Độ đậm má hồng', type: 'range', min: 0.1, max: 1, step: 0.05, fmt: (v) => Math.round(v * 100) + '%' },
   ] },
   { tab: 'Phụ kiện', items: [
     { key: 'earrings', label: 'Bông tai', type: 'opts', options: D.EARRINGS },
+    { key: 'clip', label: 'Kẹp tóc', type: 'opts', options: D.CLIPS },
+    { key: 'glasses', label: 'Kính', type: 'opts', options: D.GLASSES },
     { key: 'necklace', label: 'Dây chuyền', type: 'opts', options: D.NECKLACES },
-    { key: 'clip', label: 'Trên đầu', type: 'opts', options: D.CLIPS },
   ] },
 ];
 let crTab = 0;
 function setApp(patch) {
   app = { ...app, ...patch };
   me.char.update(app);
-  store.set('ktv_app2', app);
+  store.set('ktv_app_khoi', app);
   refreshStyleBadges();
   if (joined) socket.emit('appearance', app);
 }
@@ -525,10 +520,9 @@ function renderCreator() {
 document.querySelectorAll('.cr-view [data-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
 $('#btnRandom').addEventListener('click', () => {
   const p = (a) => a[Math.floor(Math.random() * a.length)];
-  const o = p(D.OUTFITS.filter((x) => x.id !== 'casual'));
   setApp({
-    outfit: o.id, finish: o.finish, outfitColor: p(D.OUTFIT_COLORS), stockings: p(D.STOCKINGS).id, shoes: p(D.SHOE_COLORS.slice(1)),
-    hairColor: p(D.HAIR_COLORS), eyeColor: p(D.EYE_COLORS), shadow: p(D.SHADOW_COLORS), liner: p(D.LINER).id,
+    outfit: p(D.OUTFITS).id, outfitColor: p(D.OUTFIT_COLORS), shoes: p(D.SHOE_COLORS), hair: p(D.HAIR_STYLES).id, hairColor: p(D.HAIR_COLORS),
+    eyeColor: p(D.EYE_COLORS), shadow: p(D.SHADOW_COLORS), liner: p(D.LINER).id, lashes: p(D.LASHES).id, brows: p(D.BROWS).id,
     lip: p(D.LIP_COLORS), blush: p(D.BLUSH_COLORS), gloss: Math.random() < 0.5, earrings: p(D.EARRINGS).id, clip: p(D.CLIPS).id, necklace: p(D.NECKLACES).id,
   });
   renderCreator();
