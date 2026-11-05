@@ -246,3 +246,47 @@ input[type=range] { width: 100%; accent-color: var(--pink); }
   .ghen-head { flex-direction: column; align-items: stretch; gap: 6px; }
   .ghen-bar .ghen-title { font-size: 14px; }
 }
+
+/* chụp / quay / toàn màn hình / thu gọn */
+.cam-tools { position: fixed; left: 16px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 5; }
+.cam-tools button { width: 42px; height: 42px; border-radius: 12px; border: 1px solid var(--line); background: var(--glass); font-size: 19px; color: #fff; cursor: pointer; }
+.cam-tools button:hover { background: rgba(255,79,163,.35); }
+.cam-tools button.on { background: #e53935; }
+.rec-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.rec-opts .btn { display: flex; flex-direction: column; gap: 4px; padding: 14px 8px; }
+.rec-opts small { opacity: .7; font-size: 12px; }
+.rec-bar { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 40; display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,.75); border: 1px solid #e53935; border-radius: 30px; padding: 6px 8px 6px 14px; color: #fff; }
+.rec-bar.hidden { display: none; }
+.rec-bar .dot { width: 12px; height: 12px; border-radius: 50%; background: #ff1744; animation: recblink 1s infinite; }
+.rec-bar .btn { padding: 6px 12px; font-size: 13px; }
+@keyframes recblink { 50% { opacity: .2; } }
+.shot-flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 60; }
+.shot-flash.go { animation: shotflash .35s ease-out; }
+@keyframes shotflash { 0% { opacity: .85; } 100% { opacity: 0; } }
+.unclean { position: fixed; left: 12px; bottom: 12px; z-index: 41; padding: 6px 10px; border-radius: 20px; border: 1px solid var(--line); background: rgba(0,0,0,.45); color: #fff; font-size: 12px; opacity: .6; }
+.unclean.hidden { display: none; }
+body.clean #hud > *:not(.cam-tools):not(#prompt) { visibility: hidden !important; }
+body.clean #hud > #joy, body.clean #hud > #actBtn { visibility: visible !important; opacity: .35; }
+body.clean .cam-tools { opacity: .35; }
+body.clean .cam-tools:hover { opacity: 1; }
+@media (max-width: 800px), (pointer: coarse) {
+  .cam-tools { left: 10px; top: auto; bottom: 150px; transform: none; gap: 6px; }
+  .cam-tools button { width: 36px; height: 36px; font-size: 16px; border-radius: 10px; }
+}
+
+/* ===== điện thoại: gọn lại, chừa chỗ giữa màn hình cho nhân vật ===== */
+@media (max-width: 800px), (pointer: coarse) {
+  .hud-btns .lbl { display: none; }
+  .hud-btns { top: 8px; right: 8px; max-width: calc(100vw - 190px); gap: 4px; }
+  .hud-btns .btn { padding: 6px 7px; font-size: 15px; min-width: 32px; }
+  .hud-top .money small { font-size: 9px; }
+  .chatbox { top: auto; bottom: 10px; left: 8px; width: 48vw; }
+  #chatlog { max-height: 58px; font-size: 11px; margin-bottom: 4px; }
+  #chatlog div { padding: 2px 6px; }
+  #chatInput { padding: 6px 9px; font-size: 13px; }
+  .cam-tools { bottom: 92px; }
+  .prompt { top: 64px; bottom: auto; font-size: 12px; padding: 7px 12px; max-width: calc(100% - 16px); }
+  .holding { bottom: auto; top: 104px; }
+  .emotes { bottom: 128px; right: 12px; }
+  .actbtn { right: 14px; bottom: 16px; width: 64px; height: 64px; font-size: 20px; }
+}
