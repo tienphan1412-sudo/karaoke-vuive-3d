@@ -8,7 +8,10 @@ const store = require('./store');
 const F = require('./features');
 
 const app = express();
-app.use(express.static(path.join(__dirname, 'public')));
+// html/js/css: luôn hỏi lại server xem có bản mới không (không cần người chơi bấm tải lại cứng sau mỗi lần cập nhật)
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, file) => { if (/\.(html|js|css)$/.test(file)) res.setHeader('Cache-Control', 'no-cache'); },
+}));
 app.use('/vendor/three', express.static(path.join(__dirname, 'node_modules', 'three')));
 app.get('/health', (req, res) => res.send('ok'));
 // danh sách file nhạc trong public/music
