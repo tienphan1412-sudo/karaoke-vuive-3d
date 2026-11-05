@@ -31,9 +31,9 @@ const ROOMS = [
 ];
 const GENRES = ['Bolero', 'Nhạc trẻ', 'K-pop', 'Rap', 'Remix'];
 const OUTFIT_STYLE = {
-  xetaa: 'longlay', xoe: 'longlay', mermaid: 'longlay',
-  body: 'goicam', crop: 'goicam',
-  babydoll: 'ngoanhien', blazer: 'ngoanhien', casual: 'ngoanhien',
+  duoica: 'longlay', congchua: 'longlay',
+  bodycon: 'goicam', haiday: 'goicam',
+  aodai: 'ngoanhien', cardigan: 'ngoanhien',
 };
 
 const TYPES = {
