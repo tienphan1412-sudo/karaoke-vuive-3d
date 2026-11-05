@@ -57,6 +57,15 @@ Người chơi tạo nhân vật bằng **tên + mã PIN 4-6 số**. Tiền bo, 
 
 Chưa cài database thì game vẫn chạy, nhưng tài khoản sẽ mất mỗi khi server khởi động lại (game hiện cảnh báo ⚠️).
 
+## Bật/tắt tính năng (file `features.js`)
+Mỗi tính năng có 1 dòng `true` (bật) / `false` (tắt). Muốn mở tính năng mới cho người chơi: sửa `false` thành `true` ngay trên GitHub (bấm vào file → biểu tượng cây bút → sửa → Commit). Render tự cập nhật sau vài phút.
+
+Lộ trình dự kiến:
+- Đợt 1+2 (đang mở): 🛍 Shop, 👑 Cấp bậc, 📋 Nhiệm vụ ngày, 😱 Vợ đánh ghen
+- Đợt 3: `flee` (khách quỵt tiền), `newCustomers` (Bảo vệ, Thất tình, Nhóm liên hoan)
+- Đợt 4: `police` (công an), `blackout` (cúp điện), `karaoke` (máy chấm điểm)
+- Đợt 5: `duet` (song ca 2 người), `gift` (tặng quà), `shift` (ca 10 phút + tổng kết)
+
 ## Đưa lên mạng (giống game đi chùa)
 1. Vào GitHub → **New repository** → đặt tên `ktv-lung-linh-3d` → Create.
 2. Bấm **uploading an existing file** → kéo thả **toàn bộ file và thư mục** trong file zip (không có `node_modules`) → Commit.
@@ -76,6 +85,7 @@ Mở http://localhost:3000
 ## Cấu trúc
 - `server.js`: server online (khách, yêu cầu, tiền bo, quỹ quán, chat, tài khoản)
 - `store.js`: lưu tài khoản vào MongoDB
+- `features.js`: công tắc bật/tắt từng tính năng
 - `public/js/avatar.js`: tải model VRM, may trang phục theo dáng người, vẽ makeup, phụ kiện, hoạt ảnh
 - `public/js/character.js`: dựng khách hàng nam (phong cách hài)
 - `public/models/`: các file model .vrm
