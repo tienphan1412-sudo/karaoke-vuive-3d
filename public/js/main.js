@@ -220,7 +220,7 @@ function drawCustomerLabel(lbl, c) {
   ctx.textBaseline = 'middle';
   const moodEmoji = c.mood >= 80 ? '😍' : c.mood >= 55 ? '🙂' : c.mood >= 30 ? '😐' : '😠';
   ctx.font = 'bold 34px "Be Vietnam Pro", sans-serif'; ctx.fillStyle = '#ffd54f'; ctx.textAlign = 'left';
-  ctx.fillText(`${moodEmoji} ${info.name}`, 24, 38);
+  ctx.fillText(`${moodEmoji} ${info.name}${c.drunk >= 2 ? ' 🥴' : c.drunk === 1 ? ' 🍺' : ''}`, 24, 38);
   ctx.textAlign = 'right'; ctx.font = '26px "Be Vietnam Pro", sans-serif'; ctx.fillStyle = '#ccc';
   ctx.fillText(`${c.done}/${c.need}`, w - 24, 38);
   ctx.textAlign = 'left';
@@ -256,7 +256,7 @@ function syncCustomers(list) {
       customers.set(c.id, e);
     }
     e.data = c;
-    const key = JSON.stringify([c.mood, c.servedBy, c.request, c.patience, c.line, c.done]);
+    const key = JSON.stringify([c.mood, c.servedBy, c.request, c.patience, c.line, c.done, c.drunk]);
     if (key !== e.key) { drawCustomerLabel(e.label, c); e.key = key; }
   }
   for (const [id, e] of customers) if (!seen.has(id)) removeCustomerObj(id);
@@ -669,7 +669,7 @@ function loop() {
     p.label.sprite.position.set(p.x, ((p.char.topY || 1.6) + 0.2) * ((p.app && p.app.height) || 1), p.z);
   }
   for (const e of customers.values()) {
-    e.obj.animate(t, e.data.mood, e.off);
+    e.obj.animate(t, e.data, e.off);
     // làm mới câu thoại khi hết 4 giây
     if (e.data.line && Date.now() - e.data.lineAt > 4000 && e.key.indexOf('"stale"') < 0) { drawCustomerLabel(e.label, e.data); e.key += '"stale"'; }
   }
