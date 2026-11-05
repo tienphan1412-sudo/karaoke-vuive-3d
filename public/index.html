@@ -32,7 +32,7 @@
       </div>
       <div id="loadMsg" class="howto" style="text-align:center"></div>
       <div class="howto">
-        <b>Cách chơi:</b> Đi bằng <kbd>W A S D</kbd> / joystick · Kéo chuột để xoay camera · Lại gần khách nhấn <kbd>E</kbd> để phục vụ ·
+        <b>Cách chơi:</b> <b>Nhấp chuột / chạm</b> vào chỗ muốn đến để đi · Nhấp vào khách để tới phục vụ · Kéo để xoay camera ·
         Khách gọi trái cây/nước chanh thì ra <b>Quầy bar</b> lấy · Mặc đúng gu khách được bo gấp rưỡi!
       </div>
     </div>
@@ -62,10 +62,15 @@
       <div class="money"><small>Tiền bo của bạn</small><b id="myMoney">0k</b></div>
       <div class="money fund"><small>Quỹ quán</small><b id="fund">0k</b></div>
       <div id="myStyle" class="badge"></div>
+      <div id="myLevel" class="badge lvl"></div>
+      <div id="shiftTimer" class="badge shift">⏱ Ca: --:--</div>
     </div>
     <div class="hud-btns">
       <button id="btnWardrobe" class="btn">💄 Tủ đồ</button>
-      <button id="btnShop" class="btn">🛠 Nâng cấp quán</button>
+      <button id="btnStore" class="btn">🛍 Shop</button>
+      <button id="btnQuest" class="btn">📋 Nhiệm vụ</button>
+      <button id="btnGift" class="btn">🎁 Tặng</button>
+      <button id="btnShop" class="btn">🛠 Quán</button>
       <button id="btnMusic" class="btn" title="Bật/tắt nhạc">🔊</button>
       <button id="btnHelp" class="btn">❓</button>
     </div>
@@ -80,7 +85,7 @@
     <div class="emotes">
       <button data-emote="wave">👋</button>
       <button data-emote="dance">💃</button>
-      <button data-emote="sing">🎤</button>
+      <button data-emote="sing" title="Hát / mời song ca khi đứng gần bạn">🎤</button>
     </div>
     <div id="joy" class="joy"><div class="knob"></div></div>
     <button id="actBtn" class="actbtn">E</button>
@@ -92,12 +97,43 @@
     <button class="btn close">Đóng</button></div></div>
   <div id="help" class="modal"><div class="modal-card"><div class="modal-title">❓ Cách chơi</div>
     <ul class="help">
-      <li>Khách vào các phòng 101-103 (mở khóa thêm phòng VIP). Lại gần khách và nhấn <kbd>E</kbd> (hoặc nút tròn trên điện thoại) để nhận khách.</li>
+      <li><b>Di chuyển:</b> nhấp chuột (máy tính) hoặc chạm (điện thoại) vào chỗ muốn đến, nhân vật tự đi vòng qua tường. Kéo màn hình để xoay camera. Máy tính vẫn đi bằng <kbd>W A S D</kbd> được.</li>
+      <li>Khách vào các phòng 101-103 (mở khóa thêm phòng VIP). <b>Nhấp/chạm thẳng vào khách</b> là nhân vật tự đi tới và phục vụ. Cột múa, quầy bar, gương thay đồ, quầy shop cũng vậy.</li>
       <li>Mỗi yêu cầu là một mini-game: chọn bài, rót bia, cụng ly, song ca, nhảy, nói chuyện. Trái cây và nước chanh thì ra Quầy bar lấy rồi mang tới.</li>
       <li>Làm tốt thì khách vui và bo nóng. Phục vụ xong 3-5 yêu cầu thì khách bo lớn rồi về.</li>
       <li>Mỗi khách có gu riêng: <b>Đại Gia</b> mê lộng lẫy, <b>Chú Bolero</b> và <b>Oppa</b> mê ngoan hiền, <b>Sếp Nhậu</b> và <b>Gen Z</b> mê gợi cảm. Mặc đúng gu được bo x1.5.</li>
       <li>30% tiền bo vào quỹ quán, ai cũng mua nâng cấp được. Nhấn <kbd>Q</kbd> để nhường khách cho bạn khác.</li>
+      <li data-feat="shop">🛍 <b>Shop</b> (quầy hồng cạnh phòng thay đồ, hoặc nút Shop): dùng tiền bo mua đồ. Món có ✨ (đầm VIP, túi hiệu, vương miện, son đỏ) giúp tăng tiền bo.</li>
+      <li data-feat="levels">👑 <b>Cấp bậc</b>: Tập sự → Nhân viên → Hoa khôi → Má mì. Kiếm càng nhiều tiền bo càng lên cấp; Hoa khôi và Má mì được bo thêm.</li>
+      <li data-feat="quests">📋 <b>Nhiệm vụ</b>: mỗi ngày 3 nhiệm vụ mới, làm xong tự nhận thưởng.</li>
+      <li data-feat="ghen">😱 <b>Vợ khách đánh ghen</b>: đang trong phòng thì phải chọn nhanh: nhận là nhân viên, chạy ra khỏi phòng, hoặc mời bà vợ hát (hên xui). Không chọn là ăn dép!</li>
+      <li data-feat="flee">🏃 Khách quỵt tiền: chạy theo nhấn E để nắm áo lại.</li>
+      <li data-feat="police,blackout">🚔 Công an kiểm tra: đổi áo dài (phím R). ⚡ Cúp điện: ra cầu dao tường phải.</li>
+      <li data-feat="duet,gift,shift">🎤 Đứng gần bạn khác bấm mic để song ca. 🎁 Tặng quà cho nhau. Mỗi ca 10 phút có tổng kết.</li>
     </ul><button class="btn close">Đã hiểu</button><button id="btnLogout" class="btn wide ghost" style="margin-top:8px">Đăng xuất</button></div></div>
+
+  <div id="storeModal" class="modal"><div class="modal-card wide-card"><div class="modal-title">🛍 Shop thời trang <small>Dùng tiền bo để mua. Món có ✨ giúp tăng tiền bo khi mặc/đeo.</small></div><div id="storeMoney" class="store-money"></div><div id="storeList" class="store-list"></div><button class="btn close">Đóng</button></div></div>
+  <div id="questModal" class="modal"><div class="modal-card"><div class="modal-title">📋 Nhiệm vụ hôm nay <small>Làm xong tự nhận thưởng. Mỗi ngày đổi nhiệm vụ mới.</small></div><div id="questList"></div><div id="levelBox" class="level-box"></div><button class="btn close">Đóng</button></div></div>
+  <div id="giftModal" class="modal"><div class="modal-card"><div class="modal-title">🎁 Tặng quà <small>Tặng tiền bo hoặc mua đồ tặng bạn trong quán</small></div><div id="giftBody"></div><button class="btn close">Đóng</button></div></div>
+  <div id="summaryModal" class="modal"><div class="modal-card"><div class="modal-title">🏁 Tổng kết ca làm</div><div id="summaryBody"></div><button class="btn close primary">Vào ca mới 💃</button></div></div>
+
+  <div id="ghenModal" class="overlay-modal"><div class="ghen-card">
+    <div class="ghen-title">😱 VỢ KHÁCH ĐÁNH GHEN!</div>
+    <div class="ghen-sub">Bà vợ cầm dép tổ ong nhìn bạn chằm chằm... Chọn nhanh!</div>
+    <div class="mg-timer"><i id="ghenBar"></i></div>
+    <button class="btn wide" data-ghen="staff">🙇‍♀️ "Dạ em chỉ là nhân viên phục vụ thôi chị!"</button>
+    <button class="btn wide" data-ghen="run">🏃‍♀️ Chạy ra khỏi phòng!</button>
+    <button class="btn wide" data-ghen="sing">🎤 "Mời chị ngồi hát 1 bài nha!" (hên xui)</button>
+  </div></div>
+  <div id="runBanner" class="run-banner hidden"></div>
+  <div id="policeOverlay" class="police-overlay hidden"><div class="police-box">
+    <div class="police-title">🚔 CÔNG AN PHƯỜNG KIỂM TRA!</div>
+    <div class="police-sub">Đổi sang áo dài ngoan hiền ngay, không là bị phạt!</div>
+    <button id="btnUniform" class="btn primary wide big">👘 ĐỔI ÁO DÀI NGAY! <small>(phím R)</small></button>
+    <div id="policeCount" class="police-count"></div>
+  </div></div>
+  <div id="darkOverlay" class="dark-overlay hidden"></div>
+  <div id="duetBanner" class="duet-banner hidden"></div>
 
   <div id="mg"></div>
   <div id="toast"></div>

@@ -162,3 +162,69 @@ input[type=range] { width: 100%; accent-color: var(--pink); }
 #pinInput { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: rgba(0,0,0,.35); color: #fff; font-size: 16px; font-family: inherit; margin-bottom: 12px; letter-spacing: 4px; }
 .auth-msg { min-height: 20px; margin-top: 10px; color: #ff8a80; font-size: 14px; }
 .board h4.top { margin-top: 10px; }
+
+.ksc { margin-top: 10px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.ksc small { font-size: 12px; letter-spacing: 2px; color: #40c4ff; font-weight: 700; }
+.ksc b { font-size: 64px; line-height: 1; color: #ffd54f; text-shadow: 0 0 20px #ff4fa3; animation: pop .4s; }
+.ksc span { font-size: 14px; font-weight: 400; color: #fff; }
+
+/* ===== tính năng mới ===== */
+.badge.lvl { background: linear-gradient(135deg,#7c4dff,#ff4fa3); }
+.badge.shift { background: rgba(0,0,0,.45); font-variant-numeric: tabular-nums; }
+.hud-btns { flex-wrap: wrap; justify-content: flex-end; max-width: 60vw; }
+.wide-card { width: min(640px, calc(100% - 24px)); max-height: 86vh; display: flex; flex-direction: column; }
+.store-money { font-size: 14px; margin-bottom: 8px; opacity: .85; }
+.store-list { overflow-y: auto; flex: 1; padding-right: 4px; }
+.store-cat { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; opacity: .6; margin: 12px 0 6px; font-weight: 700; }
+.store-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; border-radius: 12px; background: rgba(255,255,255,.05); margin-bottom: 6px; }
+.store-item.hl { outline: 2px solid var(--pink); }
+.store-item small { display: block; opacity: .7; font-size: 12px; }
+.store-item .bonus { color: #ffd54f; font-weight: 700; }
+.store-item .btn { white-space: nowrap; }
+.store-item .btn[disabled] { opacity: .45; }
+.opt.locked, .card.locked, .sw.locked { opacity: .55; position: relative; }
+.opt.locked::after, .card.locked::after { content: '🔒'; margin-left: 4px; }
+.sw.locked::after { content: '🔒'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; }
+.price-tag { display: inline-block; font-size: 11px; color: #ffd54f; margin-left: 4px; }
+.quest { padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.06); margin-bottom: 8px; }
+.quest.done { background: rgba(105,240,174,.15); }
+.quest b { display: block; }
+.quest .qbar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); margin-top: 6px; overflow: hidden; }
+.quest .qbar i { display: block; height: 100%; background: linear-gradient(90deg,#69f0ae,#40c4ff); }
+.quest small { opacity: .75; }
+.level-box { margin-top: 12px; font-size: 14px; padding: 10px 12px; border-radius: 12px; background: rgba(124,77,255,.18); }
+.gift-players { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.gift-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.gift-body select { width: 100%; padding: 9px; border-radius: 10px; background: rgba(0,0,0,.35); color: #fff; border: 1px solid var(--line); font-family: inherit; margin-bottom: 8px; }
+.summary-title { display: flex; justify-content: space-between; padding: 8px 10px; border-radius: 10px; background: rgba(255,213,79,.12); margin-bottom: 6px; }
+.summary-title b { color: #ffd54f; }
+.overlay-modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 27; background: rgba(120,0,0,.35); }
+.overlay-modal.show { display: flex; }
+.ghen-card { width: min(440px, calc(100% - 24px)); background: #2a0c14; border: 2px solid #ff5252; border-radius: 20px; padding: 18px; text-align: center; animation: shake .4s 2; }
+.ghen-title { font-size: 26px; font-weight: 800; color: #ff8a80; }
+.ghen-sub { margin: 6px 0 10px; opacity: .85; }
+.ghen-card .btn.wide { text-align: left; }
+@keyframes shake { 25% { transform: translateX(-8px) } 75% { transform: translateX(8px) } }
+.run-banner { position: fixed; left: 50%; top: 30%; transform: translateX(-50%); z-index: 28; font-size: 34px; font-weight: 800; color: #ffd54f; text-shadow: 0 0 20px #ff1744; pointer-events: none; text-align: center; }
+.police-overlay { position: fixed; inset: 0; z-index: 27; display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; animation: siren .5s infinite; pointer-events: none; }
+.police-overlay.hidden { display: none; }
+@keyframes siren { 0%,49% { box-shadow: inset 0 0 140px 40px rgba(255,23,68,.65); } 50%,100% { box-shadow: inset 0 0 140px 40px rgba(41,121,255,.65); } }
+.police-box { pointer-events: auto; width: min(440px, calc(100% - 24px)); background: rgba(10,20,50,.92); border: 2px solid #2979ff; border-radius: 20px; padding: 18px; text-align: center; }
+.police-title { font-size: 24px; font-weight: 800; }
+.police-sub { opacity: .85; margin: 6px 0 12px; }
+.btn.big { font-size: 20px; padding: 16px; }
+.police-count { margin-top: 8px; font-size: 28px; font-weight: 800; color: #ffd54f; }
+.dark-overlay { position: fixed; inset: 0; z-index: 4; pointer-events: none; background: radial-gradient(circle at 50% 55%, rgba(0,0,0,0) 0, rgba(0,0,0,.35) 18%, rgba(0,0,0,.92) 45%); }
+.dark-overlay.hidden { display: none; }
+.duet-banner { position: fixed; left: 50%; top: 90px; transform: translateX(-50%); z-index: 22; background: rgba(20,8,28,.92); border: 1px solid var(--pink); border-radius: 14px; padding: 10px 14px; display: flex; gap: 10px; align-items: center; }
+.duet-banner.hidden { display: none; }
+@media (max-width: 800px), (pointer: coarse) {
+  .hud-btns { top: 62px; max-width: calc(100vw - 16px); }
+  #myLevel { display: none; }
+  .badge.shift { font-size: 11px; padding: 4px 8px; }
+  .chatbox { top: 150px; }
+}
+
+/* chạm để đi: ẩn joystick trên điện thoại */
+@media (max-width: 800px), (pointer: coarse) { .joy { display: none !important; } }
+#game canvas { cursor: pointer; }
