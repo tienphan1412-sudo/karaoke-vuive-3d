@@ -9,6 +9,9 @@ export const ROOM_DEFS = [
 ];
 export const BAR = { x: -16.5, z: 4.2 };
 export const MIRROR = { x: 16.5, z: 4.2 };
+export const EXIT = { x: -18.3, z: -3.5 };
+export const BREAKER = { x: 18.3, z: -4.5 };
+export const SHOPSPOT = { x: 16.8, z: 0.4 };
 // cột múa: 1 cột trong mỗi phòng + 1 sân khấu ở sảnh
 export const POLES = [
   { x: -13 + 3.4, z: -11 + 1.0, roomId: 0 },
@@ -215,7 +218,7 @@ export function buildWorld(scene) {
 
   // ---------- cột múa inox + bục đèn ----------
   const chrome = new THREE.MeshStandardMaterial({ color: '#e8e8f0', metalness: 1, roughness: 0.12 });
-  const poleRings = [];
+  const poleRings = [], poleSpots = [];
   for (const pl of POLES) {
     const big = pl.roomId === null;
     const base = new THREE.Mesh(new THREE.CylinderGeometry(big ? 1.1 : 0.7, big ? 1.15 : 0.75, 0.05, 40), new THREE.MeshStandardMaterial({ color: '#1a0f22', metalness: 0.6, roughness: 0.25 }));
@@ -225,10 +228,37 @@ export function buildWorld(scene) {
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 2.95, 16), chrome);
     pole.position.set(pl.x, 1.5, pl.z); scene.add(pole);
     const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.05, 16), chrome); cap.position.set(pl.x, 2.97, pl.z); scene.add(cap);
-    const spot = new THREE.PointLight('#ff7ac1', 5, 4, 2); spot.position.set(pl.x, 2.6, pl.z + 0.3); scene.add(spot);
+    const spot = new THREE.PointLight('#ff7ac1', 5, 4, 2); spot.position.set(pl.x, 2.6, pl.z + 0.3); scene.add(spot); poleSpots.push(spot);
   }
+  // ---------- cửa ra (tường trái) ----------
+  box(0.12, 2.3, 1.6, new THREE.MeshStandardMaterial({ color: '#4e342e', roughness: 0.6 }), -18.88, 1.15, EXIT.z);
+  box(0.14, 0.08, 0.3, new THREE.MeshStandardMaterial({ color: '#d4af37', metalness: 0.9, roughness: 0.2 }), -18.8, 1.1, EXIT.z + 0.55);
+  plane(1.8, 0.45, textTexture('🚪 LỐI RA', { color: '#69f0ae', font: 'bold 120px "Be Vietnam Pro", sans-serif' }), -18.85, 2.55, EXIT.z, Math.PI / 2);
+  // ---------- cầu dao (tường phải) ----------
+  box(0.12, 0.6, 0.45, new THREE.MeshStandardMaterial({ color: '#9e9e9e', metalness: 0.7, roughness: 0.4 }), 18.88, 1.4, BREAKER.z);
+  const lever = box(0.12, 0.22, 0.06, new THREE.MeshStandardMaterial({ color: '#e53935' }), 18.78, 1.42, BREAKER.z).mesh;
+  const warn = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), new THREE.MeshBasicMaterial({ color: '#ff1744' }));
+  warn.position.set(18.78, 1.8, BREAKER.z); scene.add(warn);
+  plane(1.6, 0.4, textTexture('⚡ CẦU DAO', { color: '#ffd54f', font: 'bold 120px "Be Vietnam Pro", sans-serif' }), 18.85, 2.2, BREAKER.z, -Math.PI / 2);
+  // ---------- quầy shop (cạnh phòng thay đồ) ----------
+  box(0.9, 1.0, 1.6, new THREE.MeshStandardMaterial({ color: '#ad1457', roughness: 0.3, metalness: 0.3 }), 18.0, 0.5, -1.9, true);
+  box(1.0, 0.05, 1.7, new THREE.MeshStandardMaterial({ color: '#d4af37', metalness: 0.9, roughness: 0.2 }), 18.0, 1.02, -1.9);
+  ['#ffd54f', '#f48fb1', '#40c4ff'].forEach((c, i) => { const b = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.16, 0.08), new THREE.MeshStandardMaterial({ color: c })); b.position.set(18.0, 1.13, -2.4 + i * 0.45); scene.add(b); });
+  plane(2.6, 0.65, textTexture('🛍 SHOP', { color: '#ffd54f', font: 'bold 150px "Be Vietnam Pro", sans-serif' }), 18.85, 2.75, -1.9, -Math.PI / 2);
+
+  // ---------- cúp điện ----------
+  let dark = false;
+  const allLights = () => [...roomLights.map((r) => r.light), ...lobbyLights, ...poleSpots];
+  function setBlackout(on) {
+    dark = on;
+    for (const l of allLights()) { if (l.userData.base === undefined) l.userData.base = l.intensity; l.intensity = on ? 0 : l.userData.base; }
+    lever.rotation.z = on ? 0.9 : 0;
+  }
+
   let lastTV = 0;
   function update(t, upgrades) {
+    warn.visible = dark && Math.sin(t * 10) > 0;
+    if (dark) return;
     if (t - lastTV > 0.1) { drawTV(t); lastTV = t; }
     for (let i = 0; i < roomLights.length; i++) {
       const { light, base } = roomLights[i];
@@ -242,5 +272,5 @@ export function buildWorld(scene) {
     poleRings.forEach((r, i) => r.material.color.setHSL(((t * 0.15 + i * 0.2) % 1), 0.9, 0.6));
   }
 
-  return { colliders, update, setVipOpen };
+  return { colliders, update, setVipOpen, setBlackout };
 }

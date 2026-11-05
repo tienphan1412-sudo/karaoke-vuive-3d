@@ -2,6 +2,10 @@
 import * as D from './data.js';
 
 let open = false;
+let lastScore = null;
+let FEAT = {};
+export const setMgFeatures = (f) => { FEAT = f || {}; };
+export const getLastScore = () => lastScore;
 export const isMinigameOpen = () => open;
 
 const root = () => document.getElementById('mg');
@@ -44,14 +48,25 @@ function finish(q, msg) {
   return new Promise((res) => {
     const r = root();
     const el = r.querySelector('.mg-result');
-    el.textContent = msg || (q >= 0.85 ? 'Xuất sắc! 🌟' : q >= 0.5 ? 'Tạm ổn 👍' : 'Hơi tệ 😅');
+    el.innerHTML = msg || (q >= 0.85 ? 'Xuất sắc! 🌟' : q >= 0.5 ? 'Tạm ổn 👍' : 'Hơi tệ 😅');
     el.className = 'mg-result show ' + (q >= 0.5 ? 'good' : 'bad');
-    setTimeout(() => { r.classList.remove('show'); r.innerHTML = ''; open = false; res(q); }, 1200);
+    setTimeout(() => { r.classList.remove('show'); r.innerHTML = ''; open = false; res(q); }, lastScore !== null ? 2600 : 1200);
   });
 }
 
+// máy chấm điểm karaoke: hát dở vẫn có thể được 100
+function karaokeScore(q) {
+  if (!FEAT.karaoke) { lastScore = null; return ''; }
+  let score, note;
+  if (q >= 0.85) { score = 100; note = 'Xuất sắc! Máy cũng phải nể 🎉'; }
+  else if (q >= 0.5) { score = Math.random() < 0.6 ? 100 : 95 + Math.floor(Math.random() * 5); note = score === 100 ? 'Điểm này do máy chấm, không phải lỗi 🤖' : 'Suýt 100, tiếc ghê!'; }
+  else if (Math.random() < 0.5) { score = 100; note = 'Hát lạc tông mà vẫn 100?! Máy hôm nay dễ tính 🤣'; }
+  else { score = 20 + Math.floor(Math.random() * 50); note = 'Máy hôm nay khó tính quá 😭'; }
+  lastScore = score;
+  return `<div class="ksc"><small>🎤 MÁY CHẤM ĐIỂM</small><b>${score}</b><span>${note}</span></div>`;
+}
 export async function runMinigame(kind, ctx) {
-  open = true;
+  open = true; lastScore = null;
   try {
     switch (kind) {
       case 'song': return await song(ctx);
@@ -80,7 +95,8 @@ function song(ctx) {
     const stopT = timer(9000, () => end(0.1, 'Chậm quá, khách tự bấm bài luôn rồi 😑'));
     body.querySelectorAll('.mg-opt').forEach((b) => b.onclick = () => {
       const s = list[+b.dataset.i];
-      end(s.genre === genre ? 1 : 0.25, s.genre === genre ? 'Đúng gu khách! 🎶' : 'Sai gu rồi... 😬');
+      const q = s.genre === genre ? 1 : 0.25;
+      end(q, (q === 1 ? 'Đúng gu khách! 🎶' : 'Sai gu rồi... 😬') + '<br><small style="font-weight:400">Khách cầm mic hát...</small>' + karaokeScore(q));
     });
   });
 }
@@ -151,13 +167,15 @@ function cheers(ctx) {
 
 // ---------- 🎤 Song ca ----------
 function duet(ctx) {
-  const body = shell('🎤 Song ca', 'Bấm HÁT (hoặc Space) khi nốt nhạc chạm vòng tròn');
+  const body = shell('🎤 Song ca', ctx.partner ? `Song ca với <b>${ctx.partner}</b>! Bấm HÁT đúng nhịp, khớp nhau thì được thưởng` : 'Bấm HÁT (hoặc Space) khi nốt nhạc chạm vòng tròn');
+  let sd = ctx.seed || Math.floor(Math.random() * 1e9);
+  const rnd = () => { sd = (sd * 1664525 + 1013904223) % 4294967296; return sd / 4294967296; };
   hideTimer();
   body.innerHTML = `<canvas class="mg-canvas wide" width="360" height="120"></canvas><button class="mg-big" id="sing">HÁT ♪</button>`;
   const cv = body.querySelector('canvas'), c = cv.getContext('2d');
   const N = 8, TRAVEL = 1.7, HITX = 60;
   const notes = []; let t = 1.2;
-  for (let i = 0; i < N; i++) { notes.push({ time: t, judged: false, score: 0 }); t += 0.5 + Math.random() * 0.45; }
+  for (let i = 0; i < N; i++) { notes.push({ time: t, judged: false, score: 0 }); t += 0.5 + rnd() * 0.45; }
   const endT = t + 0.6;
   const t0 = performance.now();
   let flash = 0, flashText = '';
@@ -190,7 +208,7 @@ function duet(ctx) {
       if (now > endT && !done) {
         done = true;
         const q = notes.reduce((s, n) => s + n.score, 0) / N;
-        finish(q, q >= 0.85 ? 'Song ca ngọt lịm! 🎶' : q >= 0.5 ? 'Hát cũng được nha 👏' : 'Hơi lệch tông 🙉').then(res);
+        finish(q, (q >= 0.85 ? 'Song ca ngọt lịm! 🎶' : q >= 0.5 ? 'Hát cũng được nha 👏' : 'Hơi lệch tông 🙉') + karaokeScore(q)).then(res);
         return;
       }
       requestAnimationFrame(loop);
@@ -239,7 +257,7 @@ function dance(ctx) {
 
 // ---------- 💬 Nói chuyện ----------
 function chat(ctx) {
-  const pool = D.CHATS[ctx.type] || D.CHATS.daigia;
+  const pool = (ctx.data && ctx.data.comfort ? D.CHATS.thattinh_comfort : D.CHATS[ctx.type]) || D.CHATS.daigia;
   const c = pick(pool);
   const body = shell('💬 Nói chuyện', `<b>${ctx.cname}:</b> "${c.q}"`);
   const ans = shuffle(c.a);

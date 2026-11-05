@@ -9,6 +9,7 @@ export const OUTFITS = [
   { id: 'haiday', name: 'Đầm hai dây xòe', style: 'goicam', cover: { torso: 1, chest: 1, shoulder: 0, upper: 0, fore: 0 }, skirt: 'aline' },
   { id: 'aodai', name: 'Áo dài', style: 'ngoanhien', cover: { torso: 1, chest: 1, shoulder: 1, upper: 1, fore: 1 }, pants: '#fafafa', flaps: true, collar: true },
   { id: 'cardigan', name: 'Cardigan + váy xếp ly', style: 'ngoanhien', cover: { torso: 1, chest: 1, shoulder: 1, upper: 1, fore: 1 }, skirt: 'pleat' },
+  { id: 'damvip', name: 'Đầm kim sa VIP 💎', style: 'longlay', sparkle: true, cover: { torso: 1, chest: 1, shoulder: 0, upper: 0, fore: 0 }, skirt: 'mermaid' },
 ];
 
 export const OUTFIT_COLORS = ['#c2185b', '#e53935', '#8e24aa', '#3949ab', '#1e88e5', '#00897b', '#f8bbd0', '#fff59d', '#f5f5f5', '#212121', '#d4af37', '#b3e5fc'];
@@ -21,7 +22,7 @@ export const HAIR_STYLES = [
 ];
 export const EYE_COLORS = ['#3e2723', '#6d4c41', '#1565c0', '#2e7d32', '#6a1b9a', '#c62828', '#546e7a'];
 export const SHADOW_COLORS = ['none', '#f48fb1', '#ce93d8', '#ffcc80', '#a1887f', '#90caf9', '#d4af37', '#ef5350'];
-export const LIP_COLORS = ['#e57373', '#d81b60', '#b71c1c', '#f06292', '#ff8a65', '#8d6e63', '#ad1457', '#ffab91'];
+export const LIP_COLORS = ['#e57373', '#d81b60', '#b71c1c', '#f06292', '#ff8a65', '#8d6e63', '#ad1457', '#ffab91', '#9b0000'];
 export const BLUSH_COLORS = ['none', '#f8a5b8', '#ff8a80', '#ffab91', '#e1bee7'];
 export const LINER = [{ id: 'none', name: 'Không' }, { id: 'thin', name: 'Mảnh' }, { id: 'cat', name: 'Mắt mèo' }, { id: 'bold', name: 'Đậm' }];
 export const LASHES = [{ id: 'natural', name: 'Tự nhiên' }, { id: 'doll', name: 'Búp bê' }, { id: 'drama', name: 'Dày cong' }];
@@ -30,9 +31,10 @@ export const EARRINGS = [{ id: 'none', name: 'Không' }, { id: 'pearl', name: 'N
 export const CLIPS = [{ id: 'none', name: 'Không' }, { id: 'bow', name: 'Nơ' }, { id: 'flower', name: 'Kẹp hoa' }, { id: 'crown', name: 'Vương miện' }];
 export const GLASSES = [{ id: 'none', name: 'Không' }, { id: 'round', name: 'Kính tròn' }, { id: 'cat', name: 'Kính mắt mèo' }];
 export const NECKLACES = [{ id: 'none', name: 'Không' }, { id: 'pearl', name: 'Chuỗi ngọc' }, { id: 'choker', name: 'Choker' }];
+export const BAGS = [{ id: 'none', name: 'Không' }, { id: 'tui', name: 'Túi hiệu Quảng Châu 👜' }];
 
 export const DEFAULT_APP = {
-  skin: SKIN[0], height: 1, outfit: 'duoica', outfitColor: '#c2185b', shoes: '#212121',
+  skin: SKIN[0], height: 1, outfit: 'bodycon', outfitColor: '#c2185b', shoes: '#212121', bag: 'none',
   hair: 'long', hairColor: '#1a1110',
   eyeColor: '#6d4c41', shadow: '#f48fb1', shadowAmt: 0.6, liner: 'thin', lashes: 'doll', brows: 'natural',
   blush: '#f8a5b8', lip: '#d81b60', gloss: true,
@@ -58,6 +60,9 @@ export const CUSTOMER_TYPES = {
   keo:    { name: 'Thanh Niên Keo Kiệt', likes: 'any', shirt: '#9e9d24', pants: '#455a64', skin: '#d9a07a', hair: '#2b1b14' },
   oppa:   { name: 'Oppa Hàn Quốc', likes: 'ngoanhien', shirt: '#212121', pants: '#424242', skin: '#f7dcc8', hair: '#c49a6c' },
   genz:   { name: 'Cậu Ấm Gen Z', likes: 'goicam', shirt: '#ff7043', pants: '#5c6bc0', skin: '#efc3a0', hair: '#1a1110' },
+  baove:  { name: 'Bác Bảo Vệ', likes: 'any', shirt: '#2c3e70', pants: '#1f2a4d', skin: '#c99273', hair: '#9e9e9e' },
+  thattinh: { name: 'Chàng Thất Tình', likes: 'ngoanhien', shirt: '#78909c', pants: '#37474f', skin: '#efc3a0', hair: '#2b1b14' },
+  congty: { name: 'Nhân Viên Liên Hoan', likes: 'any', shirt: '#ffffff', variants: ['#ffffff', '#bbdefb', '#fce4ec'], pants: '#37474f', skin: '#e8b48f', hair: '#1a1110' },
 };
 
 export const REQ_TEXT = {
@@ -65,13 +70,14 @@ export const REQ_TEXT = {
   beer: () => 'Rót bia cho anh!',
   cheers: () => 'Cụng ly cái nào!',
   duet: () => 'Song ca 1 bài nha!',
-  chat: () => 'Ngồi nói chuyện chút đi',
+  chat: (d) => (d && d.comfort ? 'Huhu... nói gì đó an ủi anh đi...' : 'Ngồi nói chuyện chút đi'),
   fruit: () => 'Gọi đĩa trái cây nha',
   water: () => 'Cho ly nước chanh, xỉn quá...',
   dance: () => 'Nhảy cho anh coi đi!',
   pole: () => 'Múa cột cho anh xem đi!',
+  none: () => '...',
 };
-export const REQ_ICON = { song: '🎵', beer: '🍺', cheers: '🥂', duet: '🎤', chat: '💬', fruit: '🍉', water: '🍋', dance: '💃', pole: '✨' };
+export const REQ_ICON = { song: '🎵', beer: '🍺', cheers: '🥂', duet: '🎤', chat: '💬', fruit: '🍉', water: '🍋', dance: '💃', pole: '✨', none: '🏃' };
 
 export const GENRES = ['Bolero', 'Nhạc trẻ', 'K-pop', 'Rap', 'Remix'];
 // Tên bài hát đều là tên bịa cho vui
@@ -109,5 +115,25 @@ export const CHATS = {
     { q: 'Bài này có trend không chị?', a: [['Top 1 trend luôn, quay đi em!', 1], ['Chị không biết', 0.3], ['Trend năm ngoái rồi', 0.5]] },
   ],
 };
+
+Object.assign(CHATS, {
+  baove: [
+    { q: 'Hồi xưa bác hát ở xóm được giải nhất đó con', a: [['Giờ bác vẫn là ca sĩ số 1 quán con!', 1], ['Giải gì vậy bác, giải khuyến khích hả?', 0.1], ['Dạ hay quá bác', 0.5]] },
+    { q: 'Bài này xong là bác về thiệt nha!', a: [['Bác cứ hát thêm, quán là nhà bác mà!', 1], ['Dạ bác hứa 5 lần rồi đó', 0.2], ['Dạ bác về cẩn thận', 0.4]] },
+  ],
+  thattinh: [
+    { q: 'Em có tin vào tình yêu không?', a: [['Có chứ, người tốt như anh sẽ gặp người xứng đáng!', 1], ['Không, tin vào tiền thôi', 0.1], ['Dạ cũng tùy anh ơi', 0.5]] },
+    { q: 'Người ta đi lấy chồng rồi em ơi...', a: [['Mất người không thương mình là được nha anh!', 1], ['Ai biểu anh không cưới lẹ', 0], ['Thôi anh uống nước chanh đi', 0.5]] },
+  ],
+  thattinh_comfort: [
+    { q: 'Huhu... cô ấy chê anh nghèo...', a: [['Anh còn trẻ, cố lên là giàu à! Em tin anh 💪', 1], ['Thì anh nghèo thiệt mà', 0], ['Thôi anh hát bài khác đi', 0.4]] },
+    { q: 'Anh có phải người tệ lắm không em?', a: [['Không! Anh tử tế nên mới buồn vậy đó', 1], ['Chắc cũng hơi hơi á', 0.1], ['Em không biết nữa', 0.3]] },
+    { q: 'Anh muốn khóc thêm chút nữa...', a: [['Khóc đi anh, khóc xong là nhẹ lòng nè 🫂', 1], ['Khóc nhiều xấu trai lắm', 0.2], ['Dạ để em lấy khăn giấy', 0.6]] },
+  ],
+  congty: [
+    { q: 'Sếp tụi anh bao hôm nay, em nói gì với sếp đi!', a: [['Sếp đẹp trai, sếp hào phóng, sếp tăng lương!', 1], ['Sếp ơi trả lương đúng hạn nha', 0.3], ['Dạ chào sếp', 0.5]] },
+    { q: 'Mai đi làm sớm mà giờ còn ở đây nè!', a: [['Xõa hôm nay mai tính, team đỉnh nhất!', 1], ['Vậy về ngủ đi anh', 0.1], ['Dạ cố lên anh', 0.5]] },
+  ],
+});
 
 export const fmtMoney = (k) => (k >= 1000 ? (k / 1000).toFixed(k % 1000 === 0 ? 0 : 1).replace('.', ',') + ' triệu' : k + 'k');

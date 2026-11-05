@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { createGirl, createCustomer, makeLabel, roundRect } from './character.js';
-import { buildWorld, seatTransform, BAR, MIRROR, ROOM_DEFS, POLES } from './world.js';
-import { runMinigame, isMinigameOpen } from './minigames.js';
+import { createGirl, createCustomer, createNPC, createSlipper, makeLabel, roundRect } from './character.js';
+import { buildWorld, seatTransform, BAR, MIRROR, ROOM_DEFS, POLES, EXIT, BREAKER, SHOPSPOT } from './world.js';
+import { runMinigame, isMinigameOpen, getLastScore, setMgFeatures } from './minigames.js';
 import * as D from './data.js';
 import { initMusic, setZone, toggleMusic, musicOn } from './music.js';
 
@@ -25,8 +25,8 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color('#120818');
 scene.fog = new THREE.Fog('#120818', 28, 60);
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.03, 200);
-scene.add(new THREE.HemisphereLight('#ffd6f0', '#2a1040', 1.6));
-scene.add(new THREE.AmbientLight('#ffffff', 0.35));
+const hemi = new THREE.HemisphereLight('#ffd6f0', '#2a1040', 1.6); scene.add(hemi);
+const amb = new THREE.AmbientLight('#ffffff', 0.35); scene.add(amb);
 const sun = new THREE.DirectionalLight('#fff0f6', 1.0); sun.position.set(5, 10, 8); scene.add(sun);
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
 
@@ -36,11 +36,15 @@ const isMobile = matchMedia('(max-width: 800px), (pointer: coarse)').matches;
 // ================= State =================
 const DEFAULT = { ...D.DEFAULT_APP };
 const VALID_OUTFIT = (a) => (D.OUTFITS.some((o) => o.id === a.outfit) ? a : { ...a, outfit: DEFAULT.outfit });
-let app = VALID_OUTFIT({ ...DEFAULT, ...store.get('ktv_app_khoi', {}) });
+let app = VALID_OUTFIT({ ...DEFAULT, ...store.get('ktv_app_khoi', {}), uniform: false });
 let myName = store.get('ktv_name', '');
 let myId = null, joined = false, myMoney = 0;
 let gameState = { fund: 0, upgrades: {} };
 let upgradeDefs = {};
+let FEAT = {};
+let shopDefs = [], levelDefs = [], owned = [], myEarned = 0, myLevel = 0, quests = [], shiftEnd = 0, timeOffset = 0;
+const levelsById = new Map();
+const serverNow = () => Date.now() + timeOffset;
 const players = new Map();   // id -> remote
 const customers = new Map(); // id -> {data, obj, label, key}
 
@@ -123,14 +127,20 @@ addEventListener('blur', () => keys.clear());
 
 // kéo để xoay camera
 let drag = null;
-renderer.domElement.addEventListener('pointerdown', (e) => { drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; });
+renderer.domElement.addEventListener('pointerdown', (e) => { drag = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: 0 }; });
 addEventListener('pointermove', (e) => {
   if (!drag || drag.id !== e.pointerId || camMode !== 'play') return;
+  drag.moved += Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y);
   camYaw -= (e.clientX - drag.x) * 0.006;
   camPitch = Math.max(0.12, Math.min(1.25, camPitch + (e.clientY - drag.y) * 0.004));
   drag.x = e.clientX; drag.y = e.clientY;
 });
-addEventListener('pointerup', (e) => { if (drag && drag.id === e.pointerId) drag = null; });
+addEventListener('pointerup', (e) => {
+  if (!drag || drag.id !== e.pointerId) return;
+  const tap = drag.moved < 12 && performance.now() - drag.t < 600;
+  drag = null;
+  if (tap && e.target === renderer.domElement) clickTo(e.clientX, e.clientY);
+});
 renderer.domElement.addEventListener('wheel', (e) => { camDist = Math.max(2.5, Math.min(10, camDist + e.deltaY * 0.004)); }, { passive: true });
 
 // joystick
@@ -160,16 +170,19 @@ function blocked(x, z) {
 }
 function updateMe(dt, t) {
   let f = 0, r = 0;
-  if (!me.busy && camMode === 'play') {
+  const stunned = me.stunUntil > t;
+  if (!me.busy && camMode === 'play' && !stunned) {
     if (keys.has('KeyW') || keys.has('ArrowUp')) f += 1;
     if (keys.has('KeyS') || keys.has('ArrowDown')) f -= 1;
     if (keys.has('KeyD') || keys.has('ArrowRight')) r += 1;
     if (keys.has('KeyA') || keys.has('ArrowLeft')) r -= 1;
     f -= joy.y; r += joy.x;
+    if (f || r) cancelGoto();
   }
   const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);
   const rx = Math.cos(camYaw), rz = -Math.sin(camYaw);
   let mx = fx * f + rx * r, mz = fz * f + rz * r;
+  if (!f && !r && !stunned && !me.busy && camMode === 'play') { const g = gotoStep(dt); if (g) { mx = g.x; mz = g.z; } }
   const m = Math.hypot(mx, mz);
   let moving = 0;
   if (m > 0.05) {
@@ -186,6 +199,7 @@ function updateMe(dt, t) {
   }
   let anim = moving ? 'walk' : 'idle';
   if (me.emoteUntil > t) anim = me.emote;
+  if (stunned) anim = 'stun';
   me.anim = anim;
   me.char.group.position.set(me.x, 0, me.z);
   me.char.group.rotation.y = me.ry;
@@ -194,14 +208,22 @@ function updateMe(dt, t) {
   myLabel.sprite.position.set(me.x, ((me.char.topY || 1.6) + 0.2) * (app.height || 1), me.z);
 }
 function emote(e) { me.emote = e; me.emoteUntil = clock.elapsedTime + (e === 'wave' ? 2 : 4); }
-document.querySelectorAll('.emotes button').forEach((b) => b.addEventListener('click', () => emote(b.dataset.emote)));
+document.querySelectorAll('.emotes button').forEach((b) => b.addEventListener('click', () => {
+  if (b.dataset.emote === 'sing' && joined && FEAT.duet) {
+    let best = null, bd = 3;
+    for (const [id, p] of players) { const d = Math.hypot(p.x - me.x, p.z - me.z); if (d < bd) { bd = d; best = id; } }
+    if (best) { socket.emit('duetInvite', { to: best }); emote('sing'); return; }
+  }
+  emote(b.dataset.emote);
+}));
 
 // ================= Labels =================
-function drawNameLabel(lbl, name, money, isMe) {
+function drawNameLabel(lbl, name, money, isMe, level = 0) {
   const { ctx, w, h } = lbl;
   ctx.clearRect(0, 0, w, h);
   ctx.font = 'bold 44px "Be Vietnam Pro", sans-serif';
-  const text = name;
+  const L = levelDefs[level];
+  const text = (L ? L.icon + ' ' : '') + name;
   const tw = ctx.measureText(text).width + 40;
   ctx.fillStyle = isMe ? 'rgba(255,79,163,0.85)' : 'rgba(20,8,28,0.75)';
   roundRect(ctx, (w - tw) / 2, 14, tw, 64, 30); ctx.fill();
@@ -226,8 +248,10 @@ function drawCustomerLabel(lbl, c) {
   ctx.textAlign = 'left';
   const fresh = c.line && Date.now() - c.lineAt < 4000;
   ctx.font = 'bold 32px "Be Vietnam Pro", sans-serif'; ctx.fillStyle = '#fff';
-  const reqTxt = `${D.REQ_ICON[c.request.kind]} ${D.REQ_TEXT[c.request.kind](c.request.data)}`;
-  ctx.fillText(fresh ? `“${c.line}”` : reqTxt, 24, 86);
+  const stTxt = { flee: '🏃 QUỴT TIỀN! Đuổi theo nhấn E!', ghen: '😱 Vợ tới!!!', drag: '🩴 Bị vợ nhéo tai lôi về', caught: '🫵 Bị tóm rồi!' }[c.st];
+  const reqTxt = stTxt || (c.crying ? '😭 Đang khóc... cần an ủi' : `${D.REQ_ICON[c.request.kind] || ''} ${(D.REQ_TEXT[c.request.kind] || (() => ''))(c.request.data)}`);
+  if (stTxt) ctx.fillStyle = '#ff8a80';
+  ctx.fillText(fresh && !stTxt ? `“${c.line}”` : reqTxt, 24, 86);
   ctx.font = '24px "Be Vietnam Pro", sans-serif'; ctx.fillStyle = mine ? '#ff9ad0' : '#9fd8ff';
   ctx.fillText(c.servedBy ? (mine ? 'Bạn đang phục vụ' : `${c.servedName} đang phục vụ`) : 'Chưa ai tiếp! (nhấn E)', 24, 128);
   const p = c.patience / c.maxPatience;
@@ -244,7 +268,7 @@ function syncCustomers(list) {
     seen.add(c.id);
     let e = customers.get(c.id);
     if (!e) {
-      const obj = createCustomer(c.type);
+      const obj = createCustomer(c.type, c.variant || 0);
       const st = seatTransform(c.roomId, c.seat);
       obj.group.position.set(st.x, 0.08, st.z);
       obj.group.rotation.y = st.ry;
@@ -256,10 +280,31 @@ function syncCustomers(list) {
       customers.set(c.id, e);
     }
     e.data = c;
-    const key = JSON.stringify([c.mood, c.servedBy, c.request, c.patience, c.line, c.done, c.drunk]);
+    const key = JSON.stringify([c.mood, c.servedBy, c.request, c.patience, c.line, c.done, c.drunk, c.st, c.crying]);
     if (key !== e.key) { drawCustomerLabel(e.label, c); e.key = key; }
   }
   for (const [id, e] of customers) if (!seen.has(id)) removeCustomerObj(id);
+}
+function routePos(pts, d) {
+  for (let i = 1; i < pts.length; i++) {
+    const seg = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    if (d <= seg) { const t = seg ? d / seg : 0; return { x: pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * t, z: pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * t, dx: pts[i][0] - pts[i - 1][0], dz: pts[i][1] - pts[i - 1][1], end: false }; }
+    d -= seg;
+  }
+  const a = pts[pts.length - 2], b = pts[pts.length - 1];
+  return { x: b[0], z: b[1], dx: b[0] - a[0], dz: b[1] - a[1], end: true };
+}
+// cập nhật vị trí khách mỗi khung hình
+function placeCustomer(e) {
+  const c = e.data, g = e.obj.group;
+  const mv = c.st === 'flee' ? c.flee : c.st === 'drag' ? c.drag : null;
+  if (mv) {
+    const p = routePos(mv.pts, Math.max(0, (serverNow() - mv.t0) / 1000) * mv.speed);
+    g.position.set(p.x, 0, p.z); g.rotation.y = Math.atan2(p.dx, p.dz);
+    c._walking = !p.end;
+  } else if (c.st === 'caught') { c._walking = false; }
+  else { const st = seatTransform(c.roomId, c.seat); g.position.set(st.x, 0.08, st.z); g.rotation.y = st.ry; c._walking = false; }
+  e.label.sprite.position.set(g.position.x, 1.95 + (c.st !== 'seat' && c.st !== 'ghen' ? 0.35 : 0), g.position.z);
 }
 function removeCustomerObj(id) {
   const e = customers.get(id);
@@ -271,9 +316,13 @@ function removeCustomerObj(id) {
 // ================= Interaction =================
 let near = null;
 function findNear() {
+  for (const e of customers.values()) if (e.data.st === 'flee' && Math.hypot(e.obj.group.position.x - me.x, e.obj.group.position.z - me.z) < 2.2) return { type: 'flee', e };
+  if (darkOn && Math.hypot(BREAKER.x - me.x, BREAKER.z - me.z) < 2.5) return { type: 'breaker' };
+  if (FEAT.shop && Math.hypot(SHOPSPOT.x - me.x, SHOPSPOT.z - me.z) < 2) return { type: 'shop' };
   for (const pl of POLES) if (Math.hypot(pl.x - me.x, pl.z - me.z) < 1.3) return { type: 'pole', pole: pl };
   let best = null, bd = 3.1;
   for (const e of customers.values()) {
+    if (e.data.st !== 'seat') continue;
     const st = seatTransform(e.data.roomId, e.data.seat);
     const d = Math.hypot(st.x - me.x, st.z - me.z);
     if (d < bd) { bd = d; best = { type: 'customer', e }; }
@@ -290,6 +339,9 @@ function updatePrompt() {
   const key = isMobile ? 'nút tròn' : 'E';
   let txt = '';
   if (near.type === 'bar') txt = `Nhấn <b>${key}</b> để lấy đồ ở quầy bar 🍹`;
+  else if (near.type === 'flee') txt = `🫵 Nhấn <b>${key}</b> để NẮM ÁO khách quỵt tiền!`;
+  else if (near.type === 'breaker') txt = `⚡ Nhấn <b>${key}</b> để bật lại cầu dao!`;
+  else if (near.type === 'shop') txt = `Nhấn <b>${key}</b> để vào Shop thời trang 🛍`;
   else if (near.type === 'mirror') txt = `Nhấn <b>${key}</b> để thay đồ & makeup 💄`;
   else if (near.type === 'pole') {
     const c = poleCustomer();
@@ -310,11 +362,14 @@ function updatePrompt() {
   p.classList.remove('hidden');
 }
 
-async function interact() {
+async function interact(force) {
   if (!joined || me.busy || isMinigameOpen() || camMode !== 'play') return;
-  near = findNear();
+  near = force || findNear();
   if (!near) return;
   if (near.type === 'bar') { openModal('#barMenu'); return; }
+  if (near.type === 'flee') { socket.emit('catch', { cid: near.e.data.id }); return; }
+  if (near.type === 'breaker') { socket.emit('breaker'); return; }
+  if (near.type === 'shop') { openStore(); return; }
   if (near.type === 'mirror') { openCreator(); return; }
   if (near.type === 'pole') { poleDance(near.pole); return; }
   const c = near.e.data;
@@ -342,7 +397,7 @@ async function interact() {
   const q = await runMinigame(k, { type: c.type, cname: info.name, data: c.request.data });
   me.busy = false;
   me.emoteUntil = animFor ? clock.elapsedTime + 2 : 0;
-  socket.emit('resolve', { cid: c.id, kind: k, quality: q });
+  socket.emit('resolve', { cid: c.id, kind: k, quality: q, score: getLastScore() });
   sfx(q >= 0.5 ? 'good' : 'bad');
 }
 // khách mình đang phục vụ (hoặc chưa ai phục vụ) đang đòi múa cột
@@ -404,11 +459,11 @@ let actx = null;
 function sfx(kind) {
   try {
     actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-    const notes = { good: [660, 880], bad: [300, 220], tip: [784, 988, 1319], coin: [1319, 1568] }[kind] || [440];
+    const notes = { good: [660, 880], bad: [300, 220], tip: [784, 988, 1319], coin: [1319, 1568], ghen: [880, 660, 440, 330], bop: [180, 90], siren: [700, 950, 700, 950, 700, 950], level: [523, 659, 784, 1047, 1319], alarm: [988, 784, 988, 784] }[kind] || [440];
     notes.forEach((f, i) => {
       const o = actx.createOscillator(), g = actx.createGain();
-      o.type = kind === 'bad' ? 'sawtooth' : 'triangle'; o.frequency.value = f;
-      const t0 = actx.currentTime + i * 0.09;
+      o.type = kind === 'bad' || kind === 'ghen' || kind === 'bop' ? 'sawtooth' : kind === 'siren' ? 'square' : 'triangle'; o.frequency.value = f;
+      const t0 = actx.currentTime + i * (kind === 'siren' ? 0.35 : 0.09);
       g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.18, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
       o.connect(g).connect(actx.destination); o.start(t0); o.stop(t0 + 0.25);
     });
@@ -509,8 +564,10 @@ const CREATOR = [
     { key: 'clip', label: 'Kẹp tóc', type: 'opts', options: D.CLIPS },
     { key: 'glasses', label: 'Kính', type: 'opts', options: D.GLASSES },
     { key: 'necklace', label: 'Dây chuyền', type: 'opts', options: D.NECKLACES },
+    { key: 'bag', label: 'Túi xách', type: 'opts', options: D.BAGS },
   ] },
 ];
+const lockOf = (key, val) => shopDefs.find((it) => it.key === key && it.value === val && !owned.includes(it.id));
 let crTab = 0;
 function setApp(patch) {
   app = { ...app, ...patch };
@@ -532,15 +589,19 @@ function renderCreator() {
   $('.cr-body').innerHTML = tab.items.map((it) => {
     const v = app[it.key];
     let ctl = '';
-    if (it.type === 'swatch') ctl = `<div class="sw-row">${it.options.map((c) => `<button class="sw ${c === 'none' ? 'none' : ''} ${c === 'original' ? 'orig' : ''} ${c === v ? 'on' : ''}" data-k="${it.key}" data-v="${c}" style="${c !== 'none' && c !== 'original' ? 'background:' + c : ''}" title="${c === 'none' ? 'Không' : c === 'original' ? 'Gốc' : c}">${c === 'original' ? 'Gốc' : ''}</button>`).join('')}</div>`;
-    if (it.type === 'opts') ctl = `<div class="opt-row">${it.options.map((o) => `<button class="opt ${o.id === v ? 'on' : ''}" data-k="${it.key}" data-v='${JSON.stringify(o.id)}'>${o.name}</button>`).join('')}</div>`;
-    if (it.type === 'cards') ctl = `<div class="cards">${it.options.map((o) => `<button class="card ${o.id === v ? 'on' : ''}" data-k="${it.key}" data-v='${JSON.stringify(o.id)}'>${o.name}<br><small class="badge ${o.style}">${D.STYLE_NAMES[o.style]}</small></button>`).join('')}</div>`;
+    const lk = (val) => lockOf(it.key, val);
+    const price = (val) => (lk(val) ? `<span class="price-tag">${D.fmtMoney(lk(val).price)}</span>` : '');
+    if (it.type === 'swatch') ctl = `<div class="sw-row">${it.options.map((c) => `<button class="sw ${c === 'none' ? 'none' : ''} ${c === 'original' ? 'orig' : ''} ${c === v ? 'on' : ''} ${lk(c) ? 'locked' : ''}" data-k="${it.key}" data-v="${c}" style="${c !== 'none' && c !== 'original' ? 'background:' + c : ''}" title="${lk(c) ? lk(c).name + ' - ' + D.fmtMoney(lk(c).price) : c === 'none' ? 'Không' : c}">${c === 'original' ? 'Gốc' : ''}</button>`).join('')}</div>`;
+    if (it.type === 'opts') ctl = `<div class="opt-row">${it.options.map((o) => `<button class="opt ${o.id === v ? 'on' : ''} ${lk(o.id) ? 'locked' : ''}" data-k="${it.key}" data-v='${JSON.stringify(o.id)}'>${o.name}${price(o.id)}</button>`).join('')}</div>`;
+    if (it.type === 'cards') ctl = `<div class="cards">${it.options.map((o) => `<button class="card ${o.id === v ? 'on' : ''} ${lk(o.id) ? 'locked' : ''}" data-k="${it.key}" data-v='${JSON.stringify(o.id)}'>${o.name}${price(o.id)}<br><small class="badge ${o.style}">${D.STYLE_NAMES[o.style]}</small></button>`).join('')}</div>`;
     if (it.type === 'range') ctl = `<input type="range" min="${it.min}" max="${it.max}" step="${it.step}" value="${v}" data-k="${it.key}"><div style="font-size:12px;opacity:.7" id="rv-${it.key}">${it.fmt(v)}</div>`;
     return `<div class="cr-item"><div class="cr-label">${it.label}</div>${ctl}</div>`;
   }).join('');
   $('.cr-body').querySelectorAll('button[data-k]').forEach((b) => b.onclick = () => {
     const raw = b.dataset.v;
     let val; try { val = JSON.parse(raw); } catch (e) { val = raw; }
+    const locked = lockOf(b.dataset.k, val);
+    if (locked) { openStore(locked.id); return; }
     const patch = { [b.dataset.k]: val };
     if (b.dataset.k === 'outfit') { const o = D.OUTFITS.find((x) => x.id === val); if (o && o.finish) patch.finish = o.finish; }
     setApp(patch); renderCreator();
@@ -554,10 +615,11 @@ function renderCreator() {
 document.querySelectorAll('.cr-view [data-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
 $('#btnRandom').addEventListener('click', () => {
   const p = (a) => a[Math.floor(Math.random() * a.length)];
+  const pa = (key, arr, f = (x) => x) => { const ok = arr.map(f).filter((v) => !lockOf(key, v)); return ok[Math.floor(Math.random() * ok.length)]; };
   setApp({
-    outfit: p(D.OUTFITS).id, outfitColor: p(D.OUTFIT_COLORS), shoes: p(D.SHOE_COLORS), hair: p(D.HAIR_STYLES).id, hairColor: p(D.HAIR_COLORS),
-    eyeColor: p(D.EYE_COLORS), shadow: p(D.SHADOW_COLORS), liner: p(D.LINER).id, lashes: p(D.LASHES).id, brows: p(D.BROWS).id,
-    lip: p(D.LIP_COLORS), blush: p(D.BLUSH_COLORS), gloss: Math.random() < 0.5, earrings: p(D.EARRINGS).id, clip: p(D.CLIPS).id, necklace: p(D.NECKLACES).id,
+    outfit: pa('outfit', D.OUTFITS, (o) => o.id), outfitColor: p(D.OUTFIT_COLORS), shoes: p(D.SHOE_COLORS), hair: p(D.HAIR_STYLES).id, hairColor: p(D.HAIR_COLORS),
+    eyeColor: p(D.EYE_COLORS), shadow: pa('shadow', D.SHADOW_COLORS), liner: p(D.LINER).id, lashes: pa('lashes', D.LASHES, (o) => o.id), brows: p(D.BROWS).id,
+    lip: pa('lip', D.LIP_COLORS), blush: p(D.BLUSH_COLORS), gloss: Math.random() < 0.5, earrings: pa('earrings', D.EARRINGS, (o) => o.id), clip: pa('clip', D.CLIPS, (o) => o.id), necklace: pa('necklace', D.NECKLACES, (o) => o.id),
   });
   renderCreator();
 });
@@ -664,6 +726,14 @@ socket.on('needLogin', () => { joined = false; showStart('Đăng nhập lại nh
 socket.on('kicked', (msg) => { joined = false; auth && store.set('ktv_auth', auth); showStart(msg); });
 socket.on('init', (d) => {
   myId = d.you; joined = true;
+  timeOffset = d.now - Date.now();
+  FEAT = d.features || {}; applyFeatures();
+  shopDefs = d.shop || []; levelDefs = d.levels || []; owned = d.owned || []; myEarned = d.earned || 0; quests = d.quests || []; shiftEnd = d.shiftEnd || 0;
+  myLevel = d.players[myId] ? d.players[myId].level : 0;
+  if (d.app) { app = { ...app, ...d.app, uniform: false }; me.char.update(app); store.set('ktv_app_khoi', app); }
+  drawNameLabel(myLabel, myName, 0, true, myLevel); refreshLevel();
+  if (d.ghen) startGhenFx(d.ghen);
+  if (d.blackout) setDark(true);
   gameState = { fund: d.fund, upgrades: d.upgrades }; upgradeDefs = d.upgradeDefs;
   world.setVipOpen(!!gameState.upgrades.vip);
   for (const [id, p] of players) removePlayer(id);
@@ -680,7 +750,8 @@ function addPlayer(p) {
   const char = createGirl({ ...DEFAULT, ...p.app });
   scene.add(char.group);
   const label = makeLabel(512, 96, 1);
-  drawNameLabel(label, p.name, p.money, false);
+  levelsById.set(p.id, p.level || 0);
+  drawNameLabel(label, p.name, p.money, false, p.level || 0);
   scene.add(label.sprite);
   players.set(p.id, { char, label, name: p.name, money: p.money, x: p.x, z: p.z, ry: p.ry, tx: p.x, tz: p.z, tr: p.ry, anim: 'idle', holding: null, app: p.app, moving: 0 });
 }
@@ -718,6 +789,7 @@ socket.on('state', (s) => {
 });
 socket.on('tip', (t) => {
   if (t.pid === myId) {
+    if (t.caught) { floater(`+${D.fmtMoney(t.amount)} 🫵<small>Tóm được khách quỵt tiền, trả gấp đôi!</small>`); sfx('tip'); return; }
     myMoney += 0; // tiền thật cập nhật qua 'players'
     const extra = t.final ? (t.liked === true ? '<small>Đúng gu khách, bo gấp rưỡi! 😍</small>' : t.liked === false ? '<small>Lần sau mặc đúng gu sẽ được bo nhiều hơn</small>' : '<small>Khách keo nhưng vẫn bo 😂</small>') : '<small>Bo nóng! 🔥</small>';
     floater(`+${D.fmtMoney(t.amount)} 💸${extra}`);
@@ -740,6 +812,462 @@ function sendMove(t) {
   socket.emit('move', { x: +me.x.toFixed(2), z: +me.z.toFixed(2), ry: +me.ry.toFixed(2), anim: me.anim, holding: me.holding });
 }
 
+
+// =====================================================================
+// TÍNH NĂNG MỚI: shop, cấp bậc, nhiệm vụ, tặng quà, sự kiện, song ca
+// =====================================================================
+function applyFeatures() {
+  const show = (sel, on) => { const el = $(sel); if (el) el.classList.toggle('hidden', !on); };
+  show('#btnStore', FEAT.shop); show('#btnQuest', FEAT.quests || FEAT.levels); show('#btnGift', FEAT.gift);
+  show('#myLevel', FEAT.levels); show('#shiftTimer', FEAT.shift);
+  document.querySelectorAll('[data-feat]').forEach((li) => li.classList.toggle('hidden', !li.dataset.feat.split(',').some((f) => FEAT[f])));
+  setMgFeatures(FEAT);
+}
+function refreshLevel() {
+  let lv = 0; levelDefs.forEach((L, i) => { if (myEarned >= L.min) lv = i; });
+  if (levelDefs.length && lv !== myLevel) { myLevel = lv; drawNameLabel(myLabel, myName, 0, true, myLevel); }
+  const L = levelDefs[myLevel];
+  if (L) $('#myLevel').textContent = `${L.icon} ${L.name}`;
+}
+// ---------- Shop ----------
+let storeHL = null;
+function openStore(hl = null) {
+  storeHL = hl;
+  if ($('#creator').classList.contains('show')) closeCreator();
+  renderStore(); openModal('#storeModal');
+  if (hl) setTimeout(() => { const el = document.querySelector(`[data-item="${hl}"]`); el && el.scrollIntoView({ block: 'center' }); }, 50);
+}
+function renderStore() {
+  $('#storeMoney').innerHTML = `Tiền bo của bạn: <b style="color:#ffd54f">${D.fmtMoney(myMoney)}</b> · Cấp: <b>${levelDefs[myLevel] ? levelDefs[myLevel].icon + ' ' + levelDefs[myLevel].name : ''}</b>`;
+  const cats = [...new Set(shopDefs.map((it) => it.cat))];
+  $('#storeList').innerHTML = cats.map((cat) => `<div class="store-cat">${cat}</div>` + shopDefs.filter((it) => it.cat === cat).map((it) => {
+    const has = owned.includes(it.id), needLv = (it.level || 0) > myLevel;
+    const btn = has ? `<button class="btn" data-wear="${it.id}">Dùng ngay</button>` : needLv ? `<button class="btn" disabled>🔒 Cần ${levelDefs[it.level].icon} ${levelDefs[it.level].name}</button>` : `<button class="btn primary" data-buy-item="${it.id}" ${myMoney < it.price ? 'disabled' : ''}>Mua ${D.fmtMoney(it.price)}</button>`;
+    return `<div class="store-item ${storeHL === it.id ? 'hl' : ''}" data-item="${it.id}"><div><b>${it.name}</b>${it.bonus ? `<small class="bonus">✨ ${it.desc}</small>` : ''}${has ? '<small>✓ Đã có</small>' : ''}</div>${btn}</div>`;
+  }).join('')).join('');
+  document.querySelectorAll('[data-buy-item]').forEach((b) => b.onclick = async () => {
+    b.disabled = true;
+    const r = await emitP('buyItem', { id: b.dataset.buyItem });
+    if (!r.ok) { toast(r.error); renderStore(); return; }
+    owned = r.owned; myMoney = r.money; refreshHUD(); sfx('coin');
+    const it = shopDefs.find((x) => x.id === b.dataset.buyItem);
+    toast(`🛍 Đã mua <b>${it.name}</b>! Mặc luôn nè`);
+    setApp({ [it.key]: it.value });
+    renderStore();
+  });
+  document.querySelectorAll('[data-wear]').forEach((b) => b.onclick = () => { const it = shopDefs.find((x) => x.id === b.dataset.wear); setApp({ [it.key]: it.value }); toast(`Đang dùng <b>${it.name}</b> ✨`); });
+}
+$('#btnStore').addEventListener('click', () => openStore());
+socket.on('earned', (e) => { myEarned = e; refreshLevel(); if ($('#storeModal').classList.contains('show')) renderStore(); });
+socket.on('owned', (o) => { owned = o.owned; if ($('#storeModal').classList.contains('show')) renderStore(); toast('🎁 Bạn vừa được tặng đồ mới! Vào Shop/Tủ đồ để mặc thử'); });
+
+// ---------- Nhiệm vụ ----------
+function renderQuests() {
+  $('#questList').innerHTML = (FEAT.quests ? '' : '<p style="opacity:.7">Nhiệm vụ chưa mở</p>') + (FEAT.quests ? quests : []).map((q) => `<div class="quest ${q.done ? 'done' : ''}"><b>${q.done ? '✅' : '🎯'} ${q.text}</b><small>Thưởng ${D.fmtMoney(q.reward)} · ${q.prog}/${q.target}</small><div class="qbar"><i style="width:${(q.prog / q.target) * 100}%"></i></div></div>`).join('');
+  const L = levelDefs[myLevel], N = levelDefs[myLevel + 1];
+  $('#levelBox').innerHTML = L ? `Cấp hiện tại: <b>${L.icon} ${L.name}</b>${L.bonus ? ` (bo +${Math.round(L.bonus * 100)}%)` : ''}<br>${N ? `Kiếm thêm <b>${D.fmtMoney(Math.max(0, N.min - myEarned))}</b> để lên <b>${N.icon} ${N.name}</b>` : 'Bạn đã là Má mì của quán! 👑'}` : '';
+}
+$('#btnQuest').addEventListener('click', () => { renderQuests(); openModal('#questModal'); });
+socket.on('quests', (q) => { quests = q; if ($('#questModal').classList.contains('show')) renderQuests(); });
+socket.on('questDone', ({ text, reward }) => { floater(`📋 +${D.fmtMoney(reward)}<small>Xong nhiệm vụ: ${escapeHtml(text)}</small>`); sfx('level'); });
+socket.on('levelUp', ({ id, level }) => {
+  if (id === myId) { myLevel = level; drawNameLabel(myLabel, myName, 0, true, level); floater(`🎊 LÊN CẤP!<small>${levelDefs[level].icon} ${levelDefs[level].name}</small>`); sfx('level'); fireworksAt(me.x, me.z); }
+  else { const p = players.get(id); if (p) { levelsById.set(id, level); drawNameLabel(p.label, p.name, p.money, false, level); } }
+});
+
+// ---------- Tặng quà ----------
+let giftTo = null;
+function renderGift() {
+  const list = [...players.entries()];
+  if (!list.length) { $('#giftBody').innerHTML = '<p style="opacity:.8">Trong quán chưa có ai khác. Rủ bạn bè vào chơi rồi tặng quà nha!</p>'; return; }
+  if (!giftTo || !players.has(giftTo)) giftTo = list[0][0];
+  const target = players.get(giftTo);
+  const items = shopDefs.filter((it) => it.price <= Math.max(myMoney, 0));
+  $('#giftBody').innerHTML = `<div class="gift-body"><div class="cr-label">Tặng cho</div><div class="gift-players">${list.map(([id, p]) => `<button class="opt ${id === giftTo ? 'on' : ''}" data-gto="${id}">${escapeHtml(p.name)}</button>`).join('')}</div>
+    <div class="cr-label">Tặng tiền bo (bạn đang có ${D.fmtMoney(myMoney)})</div><div class="gift-row">${[50, 100, 200, 500, 1000].map((a) => `<button class="btn" data-gamt="${a}" ${myMoney < a ? 'disabled' : ''}>${D.fmtMoney(a)}</button>`).join('')}</div>
+    <div class="cr-label">Hoặc mua đồ tặng ${escapeHtml(target.name)}</div><select id="giftItem"><option value="">-- Chọn món --</option>${items.map((it) => `<option value="${it.id}">${it.name} - ${D.fmtMoney(it.price)}</option>`).join('')}</select>
+    <button class="btn primary wide" id="giftItemBtn">Mua tặng 🎁</button></div>`;
+  document.querySelectorAll('[data-gto]').forEach((b) => b.onclick = () => { giftTo = b.dataset.gto; renderGift(); });
+  const send = async (payload) => { const r = await emitP('gift', { to: giftTo, ...payload }); if (!r.ok) return toast(r.error); myMoney = r.money; refreshHUD(); sfx('coin'); closeModals(); };
+  document.querySelectorAll('[data-gamt]').forEach((b) => b.onclick = () => send({ amount: +b.dataset.gamt }));
+  $('#giftItemBtn').onclick = () => { const v = $('#giftItem').value; if (v) send({ item: v }); };
+}
+$('#btnGift').addEventListener('click', () => { renderGift(); openModal('#giftModal'); });
+socket.on('giftFx', ({ to, fromName, label }) => { if (to === myId) { floater(`🎁 ${escapeHtml(fromName)} tặng bạn<small>${escapeHtml(label)}</small>`); sfx('level'); } });
+
+// ---------- Pháo hoa ----------
+const fxParts = [];
+function fireworksAt(x, z) {
+  const cols = ['#ff4fa3', '#ffd54f', '#40c4ff', '#69f0ae', '#b388ff'];
+  for (let i = 0; i < 40; i++) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 4), new THREE.MeshBasicMaterial({ color: cols[i % 5], transparent: true }));
+    m.position.set(x, 2.2, z); scene.add(m);
+    const a = Math.random() * Math.PI * 2, b = Math.random() * Math.PI;
+    fxParts.push({ m, v: new THREE.Vector3(Math.cos(a) * Math.sin(b), Math.cos(b) + 0.6, Math.sin(a) * Math.sin(b)).multiplyScalar(2.5), life: 1.4 });
+  }
+}
+socket.on('fireworks', ({ ids }) => { for (const id of ids) { const src = id === myId ? me : players.get(id); if (src) fireworksAt(src.x, src.z); } });
+
+// ---------- sao quay trên đầu khi trúng dép ----------
+const stars = new Map();
+function setStars(id, on, x, z) {
+  let s = stars.get(id);
+  if (on && !s) { s = makeLabel(256, 96, 0.9); s.ctx.font = '64px sans-serif'; s.ctx.textAlign = 'center'; s.ctx.textBaseline = 'middle'; s.ctx.fillText('💫⭐💫', 128, 48); s.tex.needsUpdate = true; scene.add(s.sprite); stars.set(id, s); }
+  if (!on && s) { scene.remove(s.sprite); stars.delete(id); return; }
+  if (s) s.sprite.position.set(x, 0.75 + Math.sin(performance.now() / 120) * 0.05, z);
+}
+
+// ---------- Vợ đánh ghen ----------
+let ghenFx = null; // {ev, npc}
+const flying = [];
+function startGhenFx(ev) {
+  if (ghenFx) scene.remove(ghenFx.npc.group);
+  const npc = createNPC('wife'); scene.add(npc.group);
+  ghenFx = { ev, npc };
+}
+let ghenChoiceEid = null, ghenChoiceTimer = null;
+function endGhenFx(d) {
+  if (d && ghenFx && d.id !== ghenFx.ev.id) return; // tín hiệu cũ đến trễ, bỏ qua
+  if (ghenFx) { scene.remove(ghenFx.npc.group); ghenFx = null; }
+  if (!d || ghenChoiceEid === d.id) { $('#ghenModal').classList.remove('show'); clearInterval(ghenChoiceTimer); if (me.busy && !isMinigameOpen()) me.busy = false; }
+}
+socket.on('ghen', (ev) => { startGhenFx(ev); sfx('ghen'); toast('😱 <b>VỢ KHÁCH TỚI ĐÁNH GHEN!!!</b> Coi chừng dép tổ ong!'); });
+socket.on('ghenEnd', endGhenFx);
+socket.on('ghenChoice', ({ eid, deadline }) => {
+  if (isMinigameOpen()) return;
+  ghenChoiceEid = eid;
+  closeModals();
+  $('#ghenModal').classList.add('show'); me.busy = true;
+  const total = deadline - serverNow();
+  clearInterval(ghenChoiceTimer);
+  ghenChoiceTimer = setInterval(() => {
+    const left = deadline - serverNow();
+    $('#ghenBar').style.width = Math.max(0, (left / total) * 100) + '%';
+    if (left <= 0) { clearInterval(ghenChoiceTimer); $('#ghenModal').classList.remove('show'); me.busy = false; }
+  }, 50);
+  document.querySelectorAll('[data-ghen]').forEach((b) => b.onclick = () => {
+    clearInterval(ghenChoiceTimer);
+    $('#ghenModal').classList.remove('show'); me.busy = false;
+    const choice = b.dataset.ghen;
+    socket.emit('ghenAnswer', { eid, choice });
+    if (choice === 'run') {
+      const room = ghenFx ? 'r' + ghenFx.ev.roomId : null;
+      let n = 3; $('#runBanner').classList.remove('hidden'); $('#runBanner').textContent = `🏃‍♀️ CHẠY RA KHỎI PHÒNG! ${n}`;
+      const iv = setInterval(() => {
+        n--;
+        if (n > 0) { $('#runBanner').textContent = `🏃‍♀️ CHẠY RA KHỎI PHÒNG! ${n}`; return; }
+        clearInterval(iv); $('#runBanner').classList.add('hidden');
+        socket.emit('ghenRun', { eid, escaped: zoneAt(me.x, me.z) !== room });
+      }, 1000);
+    }
+  });
+});
+socket.on('ghenResult', ({ ok, text }) => { toast(text); sfx(ok ? 'good' : 'bad'); });
+socket.on('dep', ({ pid, from }) => {
+  const target = pid === myId ? me : players.get(pid);
+  if (!target) return;
+  const m = createSlipper(); m.scale.setScalar(1.6); scene.add(m);
+  flying.push({ m, from: new THREE.Vector3(from.x, 1.5, from.z), target, pid, t: 0 });
+});
+function updateGhen(t) {
+  if (!ghenFx) return;
+  const { ev, npc } = ghenFx, now = serverNow();
+  const c = customers.get(ev.cid);
+  let pos, dir, mode = 'walk', moving = false;
+  if (now < ev.choiceAt) {
+    const len = ev.enterPts.reduce((L, p, i) => (i ? L + Math.hypot(p[0] - ev.enterPts[i - 1][0], p[1] - ev.enterPts[i - 1][1]) : 0), 0);
+    const r = routePos(ev.enterPts, Math.max(0, (now - ev.t0) / ev.enterDur) * len);
+    pos = r; dir = Math.atan2(r.dx, r.dz); moving = !r.end; mode = 'angry';
+  } else if (c && c.data.st === 'drag' && c.data.drag) {
+    const r = routePos(c.data.drag.pts, Math.max(0, (now - c.data.drag.t0) / 1000) * c.data.drag.speed + 0.7);
+    pos = r; dir = Math.atan2(r.dx, r.dz); moving = !r.end; mode = 'pull';
+  } else {
+    pos = ev.stand; mode = 'pull';
+    const st = c ? c.obj.group.position : null;
+    dir = st ? Math.atan2(st.x - pos.x, st.z - pos.z) : 0;
+  }
+  npc.group.position.set(pos.x, 0, pos.z); npc.group.rotation.y = dir;
+  npc.animate(t, mode, moving);
+}
+
+// ---------- Công an ----------
+let policeFx = null;
+function wearUniform() {
+  if (!policeFx || policeFx.done) return;
+  policeFx.done = true;
+  socket.emit('policeOk');
+  setApp({ uniform: true });
+  $('#policeOverlay').classList.add('hidden');
+  setTimeout(() => setApp({ uniform: false }), 25000);
+}
+$('#btnUniform').addEventListener('click', wearUniform);
+addEventListener('keydown', (e) => { if (e.code === 'KeyR' && policeFx && document.activeElement.tagName !== 'INPUT') wearUniform(); });
+socket.on('police', ({ t0, until }) => {
+  const npc = createNPC('police'); scene.add(npc.group);
+  policeFx = { t0, until, npc, done: false };
+  $('#policeOverlay').classList.remove('hidden');
+  sfx('siren'); setTimeout(() => sfx('siren'), 2100); setTimeout(() => sfx('siren'), 4200);
+});
+socket.on('policeFine', ({ fine }) => { toast(`👮 Bị phạt <b>${D.fmtMoney(fine)}</b> vì ăn mặc chưa nghiêm túc!`); sfx('bad'); });
+socket.on('policeEnd', () => {
+  $('#policeOverlay').classList.add('hidden');
+  if (policeFx) { policeFx.leaving = serverNow(); const f = policeFx; setTimeout(() => { scene.remove(f.npc.group); if (policeFx === f) policeFx = null; }, 6000); }
+});
+function updatePolice(t) {
+  if (!policeFx) return;
+  const now = serverNow(), f = policeFx;
+  if (!f.done && !f.leaving) $('#policeCount').textContent = Math.max(0, Math.ceil((f.until - now) / 1000)) + 's';
+  const pts = [[EXIT.x + 0.5, EXIT.z], [-6, 0], [0, 1]];
+  let r, mode = 'walk';
+  if (!f.leaving) { r = routePos(pts, Math.max(0, (now - f.t0) / 1000) * 3.2); mode = r.end ? 'whistle' : 'walk'; }
+  else r = routePos([...pts].reverse(), Math.max(0, (now - f.leaving) / 1000) * 3.2);
+  f.npc.group.position.set(r.x, 0, r.z);
+  f.npc.group.rotation.y = r.end && !f.leaving ? Math.atan2(me.x - r.x, me.z - r.z) : Math.atan2(r.dx, r.dz);
+  f.npc.animate(t, mode, !r.end);
+}
+
+// ---------- Cúp điện ----------
+let darkOn = false;
+const torch = new THREE.SpotLight('#fff3d6', 0, 14, 0.55, 0.5, 1.2);
+scene.add(torch); scene.add(torch.target);
+function setDark(on) {
+  darkOn = on;
+  world.setBlackout(on);
+  hemi.intensity = on ? 0.04 : 1.6; amb.intensity = on ? 0.02 : 0.35; sun.intensity = on ? 0 : 1.0;
+  torch.intensity = on ? 30 : 0;
+  $('#darkOverlay').classList.toggle('hidden', !on);
+}
+socket.on('blackout', ({ on, by }) => {
+  setDark(on);
+  if (on) { toast('⚡ <b>CÚP ĐIỆN!</b> Ra <b>cầu dao</b> ở tường bên phải sảnh (đèn đỏ nhấp nháy) nhấn E'); sfx('alarm'); }
+  else toast(by ? `💡 ${escapeHtml(by)} đã bật lại điện!` : '💡 Có điện lại rồi!');
+});
+
+// ---------- Ca làm + tổng kết ----------
+setInterval(() => {
+  if (!shiftEnd) return;
+  const left = Math.max(0, shiftEnd - serverNow());
+  $('#shiftTimer').textContent = `⏱ Ca: ${String(Math.floor(left / 60000)).padStart(2, '0')}:${String(Math.floor(left / 1000) % 60).padStart(2, '0')}`;
+}, 500);
+socket.on('shiftEnd', ({ titles, ranking }) => {
+  $('#summaryBody').innerHTML = (titles.length ? titles.map((t) => `<div class="summary-title"><span>${t.title}</span><span><b>${escapeHtml(t.name)}</b> · ${t.value}</span></div>`).join('') + '<p style="font-size:13px;opacity:.75">Mỗi danh hiệu được thưởng thêm 100k 🎁</p>' : '<p>Ca này hơi vắng...</p>')
+    + '<div class="cr-label" style="margin-top:12px">Tiền bo trong ca</div>' + ranking.map((r, i) => `<div style="display:flex;justify-content:space-between;padding:3px 0"><span>${i + 1}. ${escapeHtml(r.name)}</span><b>${D.fmtMoney(r.tips)}</b></div>`).join('');
+  if (!isMinigameOpen()) openModal('#summaryModal');
+  sfx('level'); fireworksAt(me.x, me.z);
+});
+
+// ---------- Song ca 2 người chơi ----------
+socket.on('duetInvited', ({ from, name }) => {
+  const b = $('#duetBanner');
+  b.innerHTML = `🎤 <b>${escapeHtml(name)}</b> mời bạn song ca! <button class="btn primary" id="duetYes">Nhận</button><button class="btn" id="duetNo">✕</button>`;
+  b.classList.remove('hidden');
+  const hide = () => b.classList.add('hidden');
+  $('#duetYes').onclick = () => { socket.emit('duetInvite', { to: from }); hide(); };
+  $('#duetNo').onclick = hide;
+  setTimeout(hide, 12000);
+});
+socket.on('duetStart', async ({ did, seed, partner }) => {
+  if (isMinigameOpen()) return socket.emit('duetDone', { did, q: 0 });
+  closeModals(); me.busy = true; me.emote = 'sing'; me.emoteUntil = 1e9;
+  const q = await runMinigame('duet', { seed, partner, cname: partner, type: 'oppa', data: {} });
+  me.busy = false; me.emoteUntil = clock.elapsedTime + 2;
+  socket.emit('duetDone', { did, q });
+});
+socket.on('duetResult', ({ qa, qb, reward, partner }) => {
+  if (reward) { floater(`🎤 +${D.fmtMoney(reward)}<small>Song ca cực hợp với ${escapeHtml(partner)}!</small>`); sfx('tip'); }
+  else toast(`🎤 Song ca với ${escapeHtml(partner)} chưa khớp lắm (${Math.round(qa * 100)}% vs ${Math.round(qb * 100)}%). Thử lại nha!`);
+});
+
+// ---------- linh tinh ----------
+socket.on('sync', (t) => { const off = t - Date.now(); timeOffset = Math.abs(off - timeOffset) > 2000 ? off : timeOffset * 0.8 + off * 0.2; });
+socket.on('toast', (m) => toast(escapeHtml(m)));
+socket.on('alarm', ({ kind }) => { if (kind === 'flee') { sfx('alarm'); toast('🏃 <b>Có khách QUỴT TIỀN!</b> Chạy theo nắm áo lại (nhấn E)!'); } });
+
+function updateFx(dt, t) {
+  updateGhen(t); updatePolice(t);
+  setStars(myId || 'me', me.anim === 'stun', me.x, me.z);
+  // dép bay
+  for (let i = flying.length - 1; i >= 0; i--) {
+    const f = flying[i]; f.t += dt / 0.55;
+    const to = new THREE.Vector3(f.target.x, 1.0, f.target.z);
+    const p = f.from.clone().lerp(to, Math.min(1, f.t)); p.y += Math.sin(Math.min(1, f.t) * Math.PI) * 0.8;
+    f.m.position.copy(p); f.m.rotation.set(f.t * 20, f.t * 12, 0);
+    if (f.t >= 1) {
+      scene.remove(f.m); flying.splice(i, 1);
+      if (f.pid === myId) { me.stunUntil = clock.elapsedTime + 3; floater('🩴 BỐP!<small>Choáng 3 giây...</small>'); sfx('bop'); }
+    }
+  }
+  // pháo hoa
+  for (let i = fxParts.length - 1; i >= 0; i--) {
+    const f = fxParts[i]; f.life -= dt;
+    f.v.y -= 3 * dt; f.m.position.addScaledVector(f.v, dt); f.m.material.opacity = Math.max(0, f.life / 1.4);
+    if (f.life <= 0) { scene.remove(f.m); fxParts.splice(i, 1); }
+  }
+  // đèn pin khi cúp điện
+  if (darkOn) {
+    const fx = Math.sin(me.ry), fz = Math.cos(me.ry);
+    torch.position.set(me.x, 1.6, me.z);
+    torch.target.position.set(me.x + fx * 4, 0.4, me.z + fz * 4);
+  }
+}
+
+
+// =====================================================================
+// NHẤP / CHẠM ĐỂ DI CHUYỂN (tự tìm đường vòng qua tường)
+// =====================================================================
+const GRID = { x0: -20, z0: -18, x1: 20, z1: 21, s: 0.4 };
+GRID.nx = Math.round((GRID.x1 - GRID.x0) / GRID.s); GRID.nz = Math.round((GRID.z1 - GRID.z0) / GRID.s);
+const gIdx = (i, j) => j * GRID.nx + i;
+const toCell = (x, z) => [Math.max(0, Math.min(GRID.nx - 1, Math.round((x - GRID.x0) / GRID.s))), Math.max(0, Math.min(GRID.nz - 1, Math.round((z - GRID.z0) / GRID.s)))];
+const cellPos = (i, j) => ({ x: GRID.x0 + i * GRID.s, z: GRID.z0 + j * GRID.s });
+function findPath(sx, sz, tx, tz) {
+  const free = new Uint8Array(GRID.nx * GRID.nz);
+  for (let j = 0; j < GRID.nz; j++) for (let i = 0; i < GRID.nx; i++) { const p = cellPos(i, j); free[gIdx(i, j)] = blocked(p.x, p.z) ? 0 : 1; }
+  let [si, sj] = toCell(sx, sz), [ti, tj] = toCell(tx, tz);
+  // điểm đích nằm trong vật cản -> lấy ô trống gần nhất
+  const nearestFree = (i0, j0) => {
+    if (free[gIdx(i0, j0)]) return [i0, j0];
+    for (let r = 1; r < 8; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+      const i = i0 + di, j = j0 + dj;
+      if (i >= 0 && j >= 0 && i < GRID.nx && j < GRID.nz && free[gIdx(i, j)]) return [i, j];
+    }
+    return null;
+  };
+  const S = nearestFree(si, sj), T = nearestFree(ti, tj);
+  if (!S || !T) return null;
+  [si, sj] = S; [ti, tj] = T;
+  const N = GRID.nx * GRID.nz, g = new Float32Array(N).fill(Infinity), came = new Int32Array(N).fill(-1), closed = new Uint8Array(N);
+  const open = [[0, si, sj]]; g[gIdx(si, sj)] = 0;
+  const h = (i, j) => Math.hypot(i - ti, j - tj);
+  const DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
+  let found = false, steps = 0;
+  while (open.length && steps++ < 20000) {
+    let bi = 0; for (let k = 1; k < open.length; k++) if (open[k][0] < open[bi][0]) bi = k;
+    const [, i, j] = open.splice(bi, 1)[0], id = gIdx(i, j);
+    if (closed[id]) continue; closed[id] = 1;
+    if (i === ti && j === tj) { found = true; break; }
+    for (const [di, dj, c] of DIRS) {
+      const ni = i + di, nj = j + dj;
+      if (ni < 0 || nj < 0 || ni >= GRID.nx || nj >= GRID.nz) continue;
+      const nid = gIdx(ni, nj);
+      if (!free[nid] || closed[nid]) continue;
+      if (di && dj && (!free[gIdx(i + di, j)] || !free[gIdx(i, j + dj)])) continue; // không cắt góc tường
+      const ng = g[id] + c;
+      if (ng < g[nid]) { g[nid] = ng; came[nid] = id; open.push([ng + h(ni, nj), ni, nj]); }
+    }
+  }
+  if (!found) return null;
+  const cells = [];
+  for (let id = gIdx(ti, tj); id !== -1; id = came[id]) cells.push([id % GRID.nx, Math.floor(id / GRID.nx)]);
+  cells.reverse();
+  // rút gọn đường: bỏ các điểm có thể đi thẳng tới
+  const pts = cells.map(([i, j]) => cellPos(i, j));
+  const clear = (a, b) => { const d = Math.hypot(b.x - a.x, b.z - a.z), n = Math.ceil(d / 0.15); for (let k = 1; k < n; k++) { const t = k / n; if (blocked(a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t)) return false; } return true; };
+  const out = [{ x: sx, z: sz }];
+  let k = 0;
+  while (k < pts.length - 1) { let m = pts.length - 1; while (m > k + 1 && !clear(out[out.length - 1], pts[m])) m--; out.push(pts[m]); k = m; }
+  const last = !blocked(tx, tz) && clear(out[out.length - 1], { x: tx, z: tz }) ? { x: tx, z: tz } : null;
+  if (last) out.push(last);
+  return out.slice(1);
+}
+
+let goto = null; // { path, target, repathAt }
+const marker = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.32, 32), new THREE.MeshBasicMaterial({ color: '#ff4fa3', transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }));
+marker.rotation.x = -Math.PI / 2; marker.visible = false; scene.add(marker);
+function cancelGoto() { if (goto) { goto = null; marker.visible = false; } }
+
+// điểm đứng để phục vụ từng loại mục tiêu
+function standPoint(tg) {
+  if (tg.type === 'customer') {
+    const st = seatTransform(tg.e.data.roomId, tg.e.data.seat);
+    return { x: st.x + Math.sin(st.ry) * 1.4, z: st.z + Math.cos(st.ry) * 1.4 };
+  }
+  if (tg.type === 'flee') return { x: tg.e.obj.group.position.x, z: tg.e.obj.group.position.z };
+  if (tg.type === 'pole') return { x: tg.pole.x, z: tg.pole.z + 0.6 };
+  if (tg.type === 'bar') return { x: BAR.x + 0.5, z: BAR.z };
+  if (tg.type === 'mirror') return { x: MIRROR.x - 0.5, z: MIRROR.z };
+  if (tg.type === 'shop') return { x: SHOPSPOT.x - 0.4, z: SHOPSPOT.z };
+  if (tg.type === 'breaker') return { x: BREAKER.x - 0.6, z: BREAKER.z };
+  return null;
+}
+function reached(tg) {
+  const d = (x, z) => Math.hypot(x - me.x, z - me.z);
+  if (tg.type === 'customer') { const st = seatTransform(tg.e.data.roomId, tg.e.data.seat); return d(st.x, st.z) < 2.6; }
+  if (tg.type === 'flee') return customers.has(tg.e.data.id) && d(tg.e.obj.group.position.x, tg.e.obj.group.position.z) < 2;
+  if (tg.type === 'pole') return d(tg.pole.x, tg.pole.z) < 1.2;
+  if (tg.type === 'bar') return d(BAR.x, BAR.z) < 2.6;
+  if (tg.type === 'mirror') return d(MIRROR.x, MIRROR.z) < 2.6;
+  if (tg.type === 'shop') return d(SHOPSPOT.x, SHOPSPOT.z) < 1.8;
+  if (tg.type === 'breaker') return d(BREAKER.x, BREAKER.z) < 2.2;
+  return false;
+}
+function startGoto(x, z, target = null) {
+  const path = findPath(me.x, me.z, x, z);
+  if (!path || !path.length) { if (target && reached(target)) { interact(target); return; } toast('Không đi tới chỗ đó được 😅'); return; }
+  goto = { path, target, repathAt: performance.now() + 700 };
+  const end = path[path.length - 1];
+  marker.position.set(end.x, 0.03, end.z); marker.visible = true;
+  me.emoteUntil = 0;
+}
+function gotoStep() {
+  if (!goto) return null;
+  const tg = goto.target;
+  if (tg && (tg.type === 'customer' || tg.type === 'flee') && !customers.has(tg.e.data.id)) { cancelGoto(); return null; }
+  if (tg && reached(tg)) { const t2 = tg; cancelGoto(); interact(t2); return null; }
+  // khách quỵt tiền đang chạy: tính lại đường liên tục
+  if (tg && tg.type === 'flee' && performance.now() > goto.repathAt) {
+    const sp = standPoint(tg); const path = findPath(me.x, me.z, sp.x, sp.z);
+    if (path && path.length) goto.path = path; goto.repathAt = performance.now() + 500;
+  }
+  let wp = goto.path[0];
+  while (wp && Math.hypot(wp.x - me.x, wp.z - me.z) < 0.25) { goto.path.shift(); wp = goto.path[0]; }
+  if (!wp) { const t2 = tg; cancelGoto(); if (t2 && reached(t2)) interact(t2); return null; }
+  const dx = wp.x - me.x, dz = wp.z - me.z, m = Math.hypot(dx, dz);
+  // đi chậm lại khi gần tới điểm cuối
+  const k = goto.path.length === 1 ? Math.min(1, m / 0.4 + 0.3) : 1;
+  return { x: (dx / m) * k, z: (dz / m) * k };
+}
+
+// nhấp vào màn hình -> xác định mục tiêu
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+function clickTo(cx, cy) {
+  if (!joined || camMode !== 'play' || me.busy || isMinigameOpen()) return;
+  initMusic();
+  ndc.set((cx / innerWidth) * 2 - 1, -(cy / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  // 1) bấm trúng người khách
+  const objs = [...customers.values()].map((e) => e.obj.group);
+  const hit = ray.intersectObjects(objs, true)[0];
+  if (hit) {
+    let o = hit.object; while (o.parent && !objs.includes(o)) o = o.parent;
+    const e = [...customers.values()].find((x) => x.obj.group === o);
+    if (e) {
+      const tg = e.data.st === 'flee' ? { type: 'flee', e } : e.data.st === 'seat' ? { type: 'customer', e } : null;
+      if (tg) { const sp = standPoint(tg); startGoto(sp.x, sp.z, tg); return; }
+    }
+  }
+  // 2) bấm xuống sàn -> xem có gần vật tương tác không
+  const p = new THREE.Vector3();
+  if (!ray.ray.intersectPlane(groundPlane, p)) return;
+  const spots = [
+    ...POLES.map((pole) => ({ type: 'pole', pole, x: pole.x, z: pole.z, r: 1.0 })),
+    { type: 'bar', x: BAR.x - 1, z: BAR.z, r: 2 },
+    { type: 'mirror', x: MIRROR.x + 1, z: MIRROR.z, r: 1.8 },
+    ...(FEAT.shop ? [{ type: 'shop', x: 17.6, z: -1.2, r: 1.8 }] : []),
+    ...(darkOn ? [{ type: 'breaker', x: BREAKER.x, z: BREAKER.z, r: 1.8 }] : []),
+  ];
+  let best = null, bd = 1e9;
+  for (const sp of spots) { const d = Math.hypot(sp.x - p.x, sp.z - p.z); if (d < sp.r && d < bd) { bd = d; best = sp; } }
+  // bấm vào sàn ngay trước ghế khách cũng tính là chọn khách
+  if (!best) for (const e of customers.values()) {
+    if (e.data.st !== 'seat') continue;
+    const st = seatTransform(e.data.roomId, e.data.seat);
+    if (Math.hypot(st.x - p.x, st.z - p.z) < 0.7) { const tg = { type: 'customer', e }; const sp = standPoint(tg); startGoto(sp.x, sp.z, tg); return; }
+  }
+  if (best) { const sp = standPoint(best); startGoto(sp.x, sp.z, best); return; }
+  startGoto(p.x, p.z, null);
+}
+
 // ================= Main loop =================
 const clock = new THREE.Clock();
 function loop() {
@@ -756,9 +1284,11 @@ function loop() {
     p.char.group.position.set(p.x, 0, p.z); p.char.group.rotation.y = p.ry;
     p.char.animate(p.anim === 'walk' && !moving ? 'idle' : p.anim, t, moving || (p.anim === 'walk' ? 1 : 0), !!p.holding);
     p.char.setHolding(p.holding);
+    setStars(p.id, p.anim === 'stun', p.x, p.z);
     p.label.sprite.position.set(p.x, ((p.char.topY || 1.6) + 0.2) * ((p.app && p.app.height) || 1), p.z);
   }
   for (const e of customers.values()) {
+    placeCustomer(e);
     e.obj.animate(t, e.data, e.off);
     // làm mới câu thoại khi hết 4 giây
     if (e.data.line && Date.now() - e.data.lineAt > 4000 && e.key.indexOf('"stale"') < 0) { drawCustomerLabel(e.label, e.data); e.key += '"stale"'; }
@@ -769,6 +1299,8 @@ function loop() {
     if (!src || nowMs > b.until) { scene.remove(b.sprite); bubbles.delete(id); continue; }
     b.sprite.position.set(src.x, 2.3, src.z);
   }
+  updateFx(dt, t);
+  if (marker.visible) { const s = 1 + Math.sin(t * 8) * 0.12; marker.scale.set(s, s, s); }
   myLabel.sprite.visible = camMode === 'play';
   world.update(t, gameState.upgrades);
   updateCamera(dt);
@@ -783,4 +1315,4 @@ loop();
 refreshStyleBadges();
 
 // cho phép chạy thử tự động
-window.__ktv = { runMinigame, me, customers, players, socket, interact, setApp, openCreator, closeCreator, get app() { return app; }, scene, camera, renderer };
+window.__ktv = { clickTo, get goto() { return goto; }, runMinigame, me, customers, players, socket, interact, setApp, openCreator, closeCreator, openStore, get app() { return app; }, get owned() { return owned; }, get myMoney() { return myMoney; }, scene, camera, renderer };

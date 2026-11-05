@@ -217,6 +217,15 @@ export function createGirl(app) {
   const micHead = sph(0.022, M('#9e9e9e', { metalness: 0.8, roughness: 0.3 }), 12, 10); micHead.position.y = 0.07; mic.add(micHead);
   mic.position.set(0, -0.27, 0.02); mic.rotation.x = -0.3; mic.visible = false;
   arms[1].elbow.add(mic);
+  const bag = new THREE.Group();
+  {
+    const leather = M('#d81b60', { roughness: 0.35, metalness: 0.1 });
+    const b = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.11, 0.06), leather); b.position.y = -0.09; bag.add(b);
+    const flap = new THREE.Mesh(new THREE.BoxGeometry(0.152, 0.05, 0.062), M('#ad1457', { roughness: 0.35 })); flap.position.y = -0.055; bag.add(flap);
+    const clasp = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.02, 0.01), M('#f1cf6a', { metalness: 1, roughness: 0.2 })); clasp.position.set(0, -0.07, 0.033); bag.add(clasp);
+    const handle = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.006, 6, 18, Math.PI), M('#f1cf6a', { metalness: 1, roughness: 0.2 })); handle.position.y = -0.035; bag.add(handle);
+    bag.position.set(0, -0.12, 0.02); bag.visible = false;
+  }
   const holdItems = { fruit: new THREE.Group(), water: new THREE.Group() };
   {
     const plate = cyl(0.11, 0.08, 0.015, M('#fafafa'), 20); holdItems.fruit.add(plate);
@@ -227,6 +236,7 @@ export function createGirl(app) {
     for (const k in holdItems) { holdItems[k].position.set(0, -0.3, 0.06); holdItems[k].visible = false; arms[1].elbow.add(holdItems[k]); }
   }
 
+  arms[-1].elbow.add(bag);
   // chân
   const legs = {};
   for (const s of [-1, 1]) {
@@ -353,7 +363,7 @@ export function createGirl(app) {
     mats.skin.color.set(a.skin);
     mats.hair.color.set(a.hairColor);
     mats.shoe.color.set(a.shoes || '#222');
-    const o = OUTFITS.find((x) => x.id === a.outfit) || OUTFITS[0];
+    const o = OUTFITS.find((x) => x.id === (a.uniform ? 'aodai' : a.outfit)) || OUTFITS[0];
     mats.cloth.color.set(a.outfitColor);
     mats.cloth.metalness = o.sparkle ? 0.45 : 0.05;
     mats.cloth.roughness = o.sparkle ? 0.28 : 0.6;
@@ -386,6 +396,7 @@ export function createGirl(app) {
     }
     buildHair(a.hair);
     buildAccessories(a);
+    bag.visible = a.bag === 'tui';
     drawFace(faceCtx, a, curExpr);
     faceTex.needsUpdate = true;
     body.scale.setScalar(a.height || 1);
@@ -496,6 +507,11 @@ export function createGirl(app) {
         legs[-1].hip.rotation.set(-1.0, 0, -0.25); legs[-1].knee.rotation.x = 0.9 + Math.sin(t * 2) * 0.2;
         headPivot.rotation.x = -0.4; headPivot.rotation.z = Math.sin(t * 1.5) * 0.15;
       }
+    } else if (anim === 'stun') {
+      body.rotation.x = -1.48; body.position.y = 0.12;
+      arms[1].sh.rotation.set(0, 0, 1.4 + Math.sin(t * 12) * 0.15); arms[-1].sh.rotation.set(0, 0, -1.4 - Math.sin(t * 12) * 0.15);
+      legs[1].hip.rotation.z = 0.25; legs[-1].hip.rotation.z = -0.25 + Math.sin(t * 14) * 0.1;
+      headPivot.rotation.y = Math.sin(t * 6) * 0.4;
     } else if (anim === 'wave') {
       arms[1].sh.rotation.z = 2.6;
       arms[1].elbow.rotation.z = Math.sin(t * 10) * 0.4;
@@ -527,24 +543,30 @@ export function createGirl(app) {
 }
 
 // ======================= KHÁCH HÀNG =======================
-// expr: joy | happy | normal | annoyed | angry ; drunk: 0..3
+// expr: joy | happy | normal | annoyed | angry | sad | pain | sneaky ; drunk: 0..3
 function drawCustomerFace(ctx, type, expr = 'normal', drunk = 0) {
   const cx = 128;
   ctx.clearRect(0, 0, 256, 200);
   ctx.save(); ctx.translate(128, 108); ctx.scale(1.32, 1.32); ctx.translate(-128, -108);
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  // má đỏ khi say / giận
-  if (drunk > 0 || expr === 'angry' || type === 'sep') {
-    const a = expr === 'angry' ? 0.55 : 0.2 + drunk * 0.15;
+  if (drunk > 0 || expr === 'angry' || type === 'sep' || expr === 'pain') {
+    const a = expr === 'angry' || expr === 'pain' ? 0.5 : 0.2 + drunk * 0.15;
     ctx.fillStyle = `rgba(229,57,53,${a})`;
     for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(cx + s * 62, 122, 24, 15, 0, 0, Math.PI * 2); ctx.fill(); }
   }
-  if (drunk >= 2) { ctx.fillStyle = 'rgba(229,57,53,0.75)'; ctx.beginPath(); ctx.ellipse(cx, 112, 13, 10, 0, 0, Math.PI * 2); ctx.fill(); } // mũi đỏ
+  if (drunk >= 2) { ctx.fillStyle = 'rgba(229,57,53,0.75)'; ctx.beginPath(); ctx.ellipse(cx, 112, 13, 10, 0, 0, Math.PI * 2); ctx.fill(); }
   for (const s of [-1, 1]) {
     const ex = cx + s * 44, ey = 90;
     ctx.strokeStyle = '#1b1414'; ctx.fillStyle = '#1b1414';
-    if (drunk >= 2 && expr !== 'angry' && expr !== 'joy') {
-      // mắt xoắn ốc
+    if (expr === 'sad') {
+      ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(ex, ey - 6, 13, Math.PI * 0.15, Math.PI * 0.85); ctx.stroke();
+      ctx.fillStyle = 'rgba(79,195,247,0.85)'; ctx.fillRect(ex - 5, ey + 6, 10, 60); // dòng nước mắt
+    } else if (expr === 'pain') {
+      ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(ex - s * 14, ey - 10); ctx.lineTo(ex + s * 6, ey); ctx.lineTo(ex - s * 14, ey + 10); ctx.stroke(); // > <
+    } else if (expr === 'sneaky') {
+      ctx.beginPath(); ctx.ellipse(ex, ey, 14, 9, 0, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.stroke();
+      ctx.fillStyle = '#1b1414'; ctx.beginPath(); ctx.arc(ex + 8, ey, 6, 0, Math.PI * 2); ctx.fill(); // liếc ngang
+    } else if (drunk >= 2 && expr !== 'angry' && expr !== 'joy') {
       ctx.lineWidth = 3.5; ctx.beginPath();
       for (let k = 0; k < 40; k++) { const an = k * 0.45 * s, r = 1 + k * 0.33; const x = ex + Math.cos(an) * r, y = ey + Math.sin(an) * r; k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
       ctx.stroke();
@@ -559,19 +581,21 @@ function drawCustomerFace(ctx, type, expr = 'normal', drunk = 0) {
       ctx.beginPath(); ctx.ellipse(ex, ey, 9, 12, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex - 3, ey - 4, 3, 0, Math.PI * 2); ctx.fill();
     }
-    // chân mày
     ctx.strokeStyle = '#2b1b14'; ctx.lineWidth = 7; ctx.beginPath();
     if (expr === 'angry') { ctx.moveTo(cx + s * 20, 72); ctx.lineTo(cx + s * 64, 54); }
+    else if (expr === 'sad' || expr === 'pain') { ctx.moveTo(cx + s * 20, 58); ctx.lineTo(cx + s * 62, 70); }
     else if (expr === 'annoyed') { ctx.moveTo(cx + s * 24, 66); ctx.lineTo(cx + s * 62, 62); }
     else if (expr === 'joy' || expr === 'happy') { ctx.moveTo(cx + s * 26, 56); ctx.quadraticCurveTo(cx + s * 44, 44, cx + s * 64, 54); }
     else { ctx.moveTo(cx + s * 26, 62); ctx.lineTo(cx + s * 62, 58); }
     ctx.stroke();
   }
-  if (type === 'bolero') {
-    ctx.fillStyle = '#3a3a3a';
+  if (type === 'bolero' || type === 'baove') {
+    ctx.fillStyle = type === 'baove' ? '#cfd8dc' : '#3a3a3a';
     ctx.beginPath(); ctx.ellipse(110, 126, 22, 7, 0.2, 0, Math.PI * 2); ctx.ellipse(146, 126, 22, 7, -0.2, 0, Math.PI * 2); ctx.fill();
   }
-  // miệng
+  if (type === 'wife') { // son môi đỏ chót
+    ctx.fillStyle = '#c62828';
+  }
   const my = 145;
   ctx.strokeStyle = '#6d2f2a'; ctx.lineWidth = 5;
   if (expr === 'joy') {
@@ -583,14 +607,20 @@ function drawCustomerFace(ctx, type, expr = 'normal', drunk = 0) {
   } else if (expr === 'annoyed') {
     ctx.beginPath(); ctx.moveTo(cx - 22, my); for (let k = 1; k <= 4; k++) ctx.lineTo(cx - 22 + k * 11, my + (k % 2 ? -5 : 5)); ctx.stroke();
   } else if (expr === 'angry') {
-    ctx.fillStyle = '#5a1420'; ctx.beginPath(); ctx.moveTo(cx - 28, my + 12); ctx.quadraticCurveTo(cx, my - 14, cx + 28, my + 12); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = type === 'wife' ? '#c62828' : '#5a1420'; ctx.beginPath(); ctx.moveTo(cx - 28, my + 12); ctx.quadraticCurveTo(cx, my - 14, cx + 28, my + 12); ctx.closePath(); ctx.fill();
     ctx.fillStyle = '#fff'; ctx.fillRect(cx - 18, my + 2, 36, 8);
+  } else if (expr === 'sad' || expr === 'pain') {
+    ctx.fillStyle = '#5a1420'; ctx.beginPath(); ctx.ellipse(cx, my + 4, 22, 16, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#6d2f2a'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(cx - 20, my - 2);
+    for (let k = 1; k <= 4; k++) ctx.lineTo(cx - 20 + k * 10, my - 2 + (k % 2 ? 4 : -4)); ctx.stroke();
+  } else if (expr === 'sneaky') {
+    ctx.beginPath(); ctx.moveTo(cx - 20, my); ctx.quadraticCurveTo(cx + 4, my + 10, cx + 24, my - 8); ctx.stroke();
+    ctx.fillStyle = 'rgba(129,212,250,0.9)'; ctx.beginPath(); ctx.moveTo(cx + 70, 40); ctx.quadraticCurveTo(cx + 80, 62, cx + 70, 66); ctx.quadraticCurveTo(cx + 60, 62, cx + 70, 40); ctx.fill(); // giọt mồ hôi
   } else if (drunk >= 2) {
     ctx.beginPath(); ctx.moveTo(cx - 24, my); ctx.quadraticCurveTo(cx, my + 16, cx + 20, my - 6); ctx.stroke();
   } else {
     ctx.beginPath(); ctx.arc(cx, my - 6, 22, 0.2 * Math.PI, 0.8 * Math.PI); ctx.stroke();
   }
-  // gân giận
   if (expr === 'angry') {
     ctx.strokeStyle = '#e53935'; ctx.lineWidth = 5;
     const vx = cx + 60, vy = 44;
@@ -599,40 +629,67 @@ function drawCustomerFace(ctx, type, expr = 'normal', drunk = 0) {
   ctx.restore();
 }
 
-export function createCustomer(type) {
-  const info = CUSTOMER_TYPES[type] || CUSTOMER_TYPES.daigia;
-  const g = new THREE.Group();
-  const skin = M(info.skin), shirt = M(info.shirt), pants = M(info.pants), hairM = M(info.hair, { roughness: 0.5 });
-  const baseSkin = new THREE.Color(info.skin), redSkin = new THREE.Color('#e5533d');
-  const pelvis = sph(0.17, pants); pelvis.scale.set(1.1, 0.6, 1); pelvis.position.y = 0.5; g.add(pelvis);
+// chân có khớp: ngồi hoặc đứng/đi được
+function buildLegs(parent, pants, shoeColor = '#1b1b1b') {
+  const legs = {};
   for (const s of [-1, 1]) {
-    const thigh = cyl(0.07, 0.065, 0.42, pants); thigh.rotation.x = Math.PI / 2; thigh.position.set(s * 0.09, 0.46, 0.2); g.add(thigh);
-    const calf = cyl(0.06, 0.05, 0.44, pants); calf.position.set(s * 0.09, 0.24, 0.4); g.add(calf);
-    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.06, 0.18), M('#1b1b1b')); shoe.position.set(s * 0.09, 0.03, 0.44); g.add(shoe);
+    const hip = new THREE.Group(); hip.position.set(s * 0.09, 0.5, 0); parent.add(hip);
+    const thigh = cyl(0.07, 0.065, 0.42, pants); thigh.position.y = -0.21; hip.add(thigh);
+    const knee = new THREE.Group(); knee.position.y = -0.42; hip.add(knee);
+    const calf = cyl(0.06, 0.05, 0.44, pants); calf.position.y = -0.22; knee.add(calf);
+    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.06, 0.18), M(shoeColor)); shoe.position.set(0, -0.47, 0.04); knee.add(shoe);
+    legs[s] = { hip, knee };
   }
-  // thân trên lắc lư được, gốc ở hông
-  const upper = new THREE.Group(); upper.position.y = 0.5; g.add(upper);
-  const torso = cyl(0.15, 0.17, 0.42, shirt); torso.position.y = 0.24; upper.add(torso);
-  if (type === 'daigia' || type === 'sep') { const belly = sph(0.16, shirt); belly.scale.set(1, 0.9, 0.8); belly.position.set(0, 0.18, 0.06); upper.add(belly); }
-  const neck = cyl(0.05, 0.055, 0.08, skin); neck.position.y = 0.48; upper.add(neck);
-  const headG = new THREE.Group(); headG.position.y = 0.6; upper.add(headG);
-  headG.add(sph(0.12, skin, 24, 18));
-  const fc = document.createElement('canvas'); fc.width = 256; fc.height = 200;
-  const fctx = fc.getContext('2d');
-  drawCustomerFace(fctx, type);
-  const ft = new THREE.CanvasTexture(fc); ft.colorSpace = THREE.SRGBColorSpace;
-  headG.add(new THREE.Mesh(new THREE.SphereGeometry(0.1215, 24, 16, Math.PI / 2 - 0.8, 1.6, 1.05, 1.0), new THREE.MeshStandardMaterial({ map: ft, transparent: true, roughness: 0.7 })));
-  headG.add(new THREE.Mesh(new THREE.SphereGeometry(0.127, 24, 12, 0, Math.PI * 2, 0, type === 'bolero' ? 0.7 : 1.15), hairM));
-  // tay: vai -> khuỷu
+  return legs;
+}
+function buildArms(parent, sleeve, skin, y = 0.42, x = 0.21) {
   const arms = {};
   for (const s of [-1, 1]) {
-    const sh = new THREE.Group(); sh.position.set(s * 0.21, 0.42, 0.02); upper.add(sh);
-    const up = cyl(0.05, 0.045, 0.3, shirt); up.position.y = -0.15; sh.add(up);
+    const sh = new THREE.Group(); sh.position.set(s * x, y, 0.02); parent.add(sh);
+    const up = cyl(0.05, 0.045, 0.3, sleeve); up.position.y = -0.15; sh.add(up);
     const el = new THREE.Group(); el.position.y = -0.3; sh.add(el);
     const fo = cyl(0.045, 0.04, 0.26, skin); fo.rotation.x = Math.PI / 2; fo.position.z = 0.13; el.add(fo);
     const hand = sph(0.04, skin, 10, 8); hand.position.z = 0.27; el.add(hand);
     arms[s] = { sh, el };
   }
+  return arms;
+}
+function makeFace(headG, type) {
+  const fc = document.createElement('canvas'); fc.width = 256; fc.height = 200;
+  const fctx = fc.getContext('2d');
+  drawCustomerFace(fctx, type);
+  const ft = new THREE.CanvasTexture(fc); ft.colorSpace = THREE.SRGBColorSpace;
+  headG.add(new THREE.Mesh(new THREE.SphereGeometry(0.1215, 24, 16, Math.PI / 2 - 0.8, 1.6, 1.05, 1.0), new THREE.MeshStandardMaterial({ map: ft, transparent: true, roughness: 0.7 })));
+  return { fctx, ft };
+}
+// pose đi bộ dùng chung
+function walkPose(legs, arms, t, amp = 0.55) {
+  for (const s of [-1, 1]) {
+    const sw = Math.sin(t * 9 + (s > 0 ? Math.PI : 0)) * amp;
+    legs[s].hip.rotation.set(-sw, 0, 0);
+    legs[s].knee.rotation.x = Math.max(0, Math.sin(t * 9 + (s > 0 ? Math.PI : 0) + 1.4)) * 0.7;
+    if (arms) arms[s].sh.rotation.set(sw * 0.8, 0, s * 0.12);
+  }
+}
+
+export function createCustomer(type, variant = 0) {
+  const info = CUSTOMER_TYPES[type] || CUSTOMER_TYPES.daigia;
+  const g = new THREE.Group();
+  const root = new THREE.Group(); g.add(root);
+  const shirtC = info.variants ? info.variants[variant % info.variants.length] : info.shirt;
+  const skin = M(info.skin), shirt = M(shirtC), pants = M(info.pants), hairM = M(info.hair, { roughness: 0.5 });
+  const baseSkin = new THREE.Color(info.skin), redSkin = new THREE.Color('#e5533d');
+  const pelvis = sph(0.17, pants); pelvis.scale.set(1.1, 0.6, 1); pelvis.position.y = 0.5; root.add(pelvis);
+  const legs = buildLegs(root, pants);
+  const upper = new THREE.Group(); upper.position.y = 0.5; root.add(upper);
+  const torso = cyl(0.15, 0.17, 0.42, shirt); torso.position.y = 0.24; upper.add(torso);
+  if (type === 'daigia' || type === 'sep') { const belly = sph(0.16, shirt); belly.scale.set(1, 0.9, 0.8); belly.position.set(0, 0.18, 0.06); upper.add(belly); }
+  const neck = cyl(0.05, 0.055, 0.08, skin); neck.position.y = 0.48; upper.add(neck);
+  const headG = new THREE.Group(); headG.position.y = 0.6; upper.add(headG);
+  headG.add(sph(0.12, skin, 24, 18));
+  const { fctx, ft } = makeFace(headG, type);
+  headG.add(new THREE.Mesh(new THREE.SphereGeometry(0.127, 24, 12, 0, Math.PI * 2, 0, type === 'bolero' ? 0.7 : 1.15), hairM));
+  const arms = buildArms(upper, shirt, skin);
   const gold = M('#e8c25a', { metalness: 0.9, roughness: 0.25 });
   if (type === 'daigia') {
     const chain = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.012, 8, 24), gold); chain.rotation.x = Math.PI / 2 - 0.3; chain.position.set(0, 0.42, 0.04); upper.add(chain);
@@ -642,9 +699,7 @@ export function createCustomer(type) {
     const brim = cyl(0.19, 0.19, 0.012, M('#5d4037'), 20); brim.position.y = 0.09; headG.add(brim);
     const top = cyl(0.11, 0.12, 0.09, M('#5d4037'), 20); top.position.y = 0.14; headG.add(top);
   }
-  if (type === 'sep') {
-    const tie = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.28, 4), M('#c62828')); tie.rotation.x = Math.PI; tie.position.set(0, 0.28, 0.165); upper.add(tie);
-  }
+  if (type === 'sep') { const tie = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.28, 4), M('#c62828')); tie.rotation.x = Math.PI; tie.position.set(0, 0.28, 0.165); upper.add(tie); }
   if (type === 'keo') {
     const c = sph(0.13, M('#1e88e5'), 20, 10); c.scale.y = 0.6; c.position.y = 0.06; headG.add(c);
     const bill = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.012, 0.12), M('#1565c0')); bill.position.set(0, 0.04, -0.17); headG.add(bill);
@@ -654,12 +709,26 @@ export function createCustomer(type) {
     const band = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.012, 8, 20, Math.PI), M('#212121')); band.position.y = 0.02; headG.add(band);
     for (const s of [-1, 1]) { const cup = cyl(0.04, 0.04, 0.03, M('#ff4081'), 14); cup.rotation.z = Math.PI / 2; cup.position.set(s * 0.13, 0.0, 0); headG.add(cup); }
   }
-  // ly bia tay phải
+  if (type === 'baove') {
+    const cap = cyl(0.125, 0.13, 0.07, M('#1f2a4d'), 20); cap.position.y = 0.1; headG.add(cap);
+    const bill = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.015, 0.1), M('#111')); bill.position.set(0, 0.07, 0.15); headG.add(bill);
+    const badge = cyl(0.025, 0.025, 0.01, gold, 6); badge.rotation.x = Math.PI / 2; badge.position.set(0, 0.11, 0.128); headG.add(badge);
+    const pocket = cyl(0.03, 0.03, 0.01, gold, 6); pocket.rotation.x = Math.PI / 2; pocket.position.set(0.08, 0.34, 0.16); upper.add(pocket);
+  }
+  if (type === 'thattinh') {
+    const hood = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.05, 8, 20), shirt); hood.rotation.x = Math.PI / 2 - 0.2; hood.position.set(0, 0.47, -0.05); upper.add(hood);
+    for (let i = 0; i < 6; i++) { const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.08, 5), hairM); tuft.position.set(Math.cos(i) * 0.08, 0.12, Math.sin(i * 2) * 0.06); tuft.rotation.set(Math.sin(i) * 0.6, 0, Math.cos(i * 3) * 0.6); headG.add(tuft); }
+  }
+  if (type === 'congty') {
+    const strap = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.008, 6, 20, Math.PI), M('#1e88e5')); strap.rotation.set(Math.PI, 0, 0); strap.position.set(0, 0.44, 0.08); upper.add(strap);
+    const card = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.01), M('#fafafa')); card.position.set(0, 0.32, 0.17); upper.add(card);
+  }
+  // ly bia
   const beer = new THREE.Group();
   beer.add(cyl(0.032, 0.03, 0.11, M('#ffb300', { transparent: true, opacity: 0.85, roughness: 0.15 }), 12));
   const foam = cyl(0.033, 0.033, 0.02, M('#fffde7'), 12); foam.position.y = 0.06; beer.add(foam);
   beer.position.set(0, 0.04, 0.3); arms[1].el.add(beer);
-  // hạt bay trên đầu: khói (giận), bong bóng (say)
+  // hạt bay: khói / bong bóng / nước mắt
   const puffs = [];
   for (let i = 0; i < 4; i++) {
     const m = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), new THREE.MeshBasicMaterial({ color: '#fff', transparent: true, opacity: 0, depthWrite: false }));
@@ -669,50 +738,74 @@ export function createCustomer(type) {
   let faceKey = '';
   function animate(t, c, offset = 0) {
     const data = typeof c === 'number' ? { mood: c } : c || {};
-    const mood = data.mood ?? 60, drunk = data.drunk || 0;
+    const mood = data.mood ?? 60, drunk = data.drunk || 0, st = data.st || 'seat';
     const reacting = data.react && Date.now() - (data.reactAt || 0) < 3000;
-    const expr = reacting ? (data.react === 'good' ? 'joy' : 'angry') : mood >= 75 ? 'happy' : mood >= 45 ? 'normal' : mood >= 25 ? 'annoyed' : 'angry';
+    let expr = reacting ? (data.react === 'good' ? 'joy' : 'angry') : mood >= 75 ? 'happy' : mood >= 45 ? 'normal' : mood >= 25 ? 'annoyed' : 'angry';
+    if (data.crying) expr = 'sad';
+    if (data.ear || st === 'drag') expr = 'pain';
+    if (st === 'flee') expr = 'sneaky';
+    if (st === 'caught') expr = 'pain';
     const key = expr + drunk;
     if (key !== faceKey) { faceKey = key; drawCustomerFace(fctx, type, expr, drunk); ft.needsUpdate = true; }
-    const tint = expr === 'angry' ? 0.45 + 0.15 * Math.sin(t * 8) : drunk * 0.08;
+    const tint = expr === 'angry' ? 0.45 + 0.15 * Math.sin(t * 8) : expr === 'pain' ? 0.35 : drunk * 0.08;
     skin.color.copy(baseSkin).lerp(redSkin, tint);
+    // tư thế gốc
     upper.rotation.set(0, 0, 0); upper.position.y = 0.5; headG.rotation.set(0, 0, 0); headG.position.set(0, 0.6, 0);
     for (const s of [-1, 1]) { arms[s].sh.rotation.set(0, 0, s * 0.12); arms[s].el.rotation.set(0, 0, 0); }
     const T = t + offset;
-    if (expr === 'joy') {
-      // cười ha hả: ngửa đầu, nâng ly, vỗ đùi
-      upper.rotation.x = -0.15 + Math.sin(T * 14) * 0.04;
-      headG.rotation.x = -0.35; headG.position.y = 0.6 + Math.abs(Math.sin(T * 14)) * 0.02;
-      arms[1].sh.rotation.set(-2.3, 0, 0.1); arms[1].el.rotation.set(-0.3 + Math.sin(T * 6) * 0.2, 0, 0);
-      arms[-1].sh.rotation.set(-0.3, 0, -0.4); arms[-1].el.rotation.set(-0.2 + Math.sin(T * 12) * 0.5, 0, 0);
-    } else if (expr === 'happy') {
-      headG.rotation.z = Math.sin(T * 4) * 0.15; headG.position.y = 0.6 + Math.abs(Math.sin(T * 4)) * 0.02;
-      upper.rotation.z = Math.sin(T * 2) * 0.05;
-      arms[1].sh.rotation.x = -Math.max(0, Math.sin(T * 1.5)) * 1.2;
-    } else if (expr === 'annoyed') {
-      headG.rotation.y = Math.sin(T * 1.5) * 0.25;
-      arms[-1].el.rotation.x = Math.max(0, Math.sin(T * 9)) * 0.15;
-    } else if (expr === 'angry') {
-      // đập bàn, lắc đầu, chồm tới
-      upper.rotation.x = 0.18;
-      headG.rotation.y = Math.sin(T * 12) * 0.25;
-      const slam = Math.abs(Math.sin(T * 5));
-      arms[-1].sh.rotation.set(-1.0 + slam * 0.7, 0, -0.1);
-      arms[1].sh.rotation.set(-1.0 + Math.abs(Math.sin(T * 5 + 1.5)) * 0.7, 0, 0.1);
+    const standing = st !== 'seat' && st !== 'ghen';
+    beer.visible = !standing;
+    if (standing) {
+      root.position.y = 0.39;
+      if (data._walking) walkPose(legs, arms, T, st === 'flee' ? 0.7 : 0.4);
+      else for (const s of [-1, 1]) { legs[s].hip.rotation.set(0, 0, 0); legs[s].knee.rotation.set(0, 0, 0); }
+      if (st === 'flee') { upper.rotation.x = 0.35; headG.rotation.y = Math.sin(T * 3) * 0.6; } // lom khom, ngó trước ngó sau
+      if (st === 'drag') {
+        upper.rotation.set(0.2, 0, -0.35); headG.rotation.z = -0.5; // bị kéo tai nghiêng đầu
+        arms[-1].sh.rotation.set(-2.6, 0, -0.5); arms[-1].el.rotation.set(-0.8, 0, 0);
+        arms[1].sh.rotation.set(-0.6 + Math.sin(T * 10) * 0.4, 0, 0.6); // tay quơ quào
+      }
+      if (st === 'caught') { arms[1].sh.rotation.set(0, 0, 2.6); arms[-1].sh.rotation.set(0, 0, -2.6); } // giơ tay đầu hàng
     } else {
-      headG.rotation.z = Math.sin(T * 1.2) * 0.04;
+      root.position.y = 0;
+      for (const s of [-1, 1]) { legs[s].hip.rotation.set(-Math.PI / 2, 0, 0); legs[s].knee.rotation.set(Math.PI / 2, 0, 0); }
+      if (data.ear) {
+        upper.rotation.z = -0.25; headG.rotation.z = -0.5;
+        arms[-1].sh.rotation.set(-2.6, 0, -0.4); arms[-1].el.rotation.set(-0.8, 0, 0);
+        arms[1].sh.rotation.set(-0.8 + Math.sin(T * 12) * 0.3, 0, 0.4);
+      } else if (data.crying) {
+        // gục đầu khóc rung vai
+        upper.rotation.x = 0.55 + Math.sin(T * 9) * 0.04;
+        headG.rotation.x = 0.3;
+        for (const s of [-1, 1]) { arms[s].sh.rotation.set(-1.3, 0, s * 0.35); arms[s].el.rotation.set(-0.9, 0, 0); }
+      } else if (expr === 'joy') {
+        upper.rotation.x = -0.15 + Math.sin(T * 14) * 0.04;
+        headG.rotation.x = -0.35; headG.position.y = 0.6 + Math.abs(Math.sin(T * 14)) * 0.02;
+        arms[1].sh.rotation.set(-2.3, 0, 0.1); arms[1].el.rotation.set(-0.3 + Math.sin(T * 6) * 0.2, 0, 0);
+        arms[-1].sh.rotation.set(-0.3, 0, -0.4); arms[-1].el.rotation.set(-0.2 + Math.sin(T * 12) * 0.5, 0, 0);
+      } else if (expr === 'happy') {
+        headG.rotation.z = Math.sin(T * 4) * 0.15; headG.position.y = 0.6 + Math.abs(Math.sin(T * 4)) * 0.02;
+        upper.rotation.z = Math.sin(T * 2) * 0.05;
+        arms[1].sh.rotation.x = -Math.max(0, Math.sin(T * 1.5)) * 1.2;
+      } else if (expr === 'annoyed') {
+        headG.rotation.y = Math.sin(T * 1.5) * 0.25;
+        arms[-1].el.rotation.x = Math.max(0, Math.sin(T * 9)) * 0.15;
+      } else if (expr === 'angry') {
+        upper.rotation.x = 0.18; headG.rotation.y = Math.sin(T * 12) * 0.25;
+        arms[-1].sh.rotation.set(-1.0 + Math.abs(Math.sin(T * 5)) * 0.7, 0, -0.1);
+        arms[1].sh.rotation.set(-1.0 + Math.abs(Math.sin(T * 5 + 1.5)) * 0.7, 0, 0.1);
+      } else headG.rotation.z = Math.sin(T * 1.2) * 0.04;
+      if (drunk > 0 && !data.ear && !data.crying) {
+        const k = drunk / 3;
+        upper.rotation.z += Math.sin(T * 1.3) * 0.25 * k;
+        upper.rotation.x += 0.08 * k + Math.sin(T * 0.9) * 0.06 * k;
+        headG.rotation.z += Math.sin(T * 1.3 + 0.8) * 0.3 * k;
+        headG.rotation.x += Math.sin(T * 0.7) * 0.15 * k;
+        if ((T % 3.3) < 0.15) upper.position.y += 0.04 * k;
+        if (expr === 'normal' || expr === 'happy') arms[1].sh.rotation.x += -0.5 - Math.sin(T * 1.3) * 0.3;
+      }
     }
-    // say: lảo đảo + nấc cụt
-    if (drunk > 0) {
-      const k = drunk / 3;
-      upper.rotation.z += Math.sin(T * 1.3) * 0.25 * k;
-      upper.rotation.x += 0.08 * k + Math.sin(T * 0.9) * 0.06 * k;
-      headG.rotation.z += Math.sin(T * 1.3 + 0.8) * 0.3 * k;
-      headG.rotation.x += Math.sin(T * 0.7) * 0.15 * k;
-      if ((T % 3.3) < 0.15) upper.position.y += 0.04 * k;
-      if (expr === 'normal' || expr === 'happy') arms[1].sh.rotation.x += -0.5 - Math.sin(T * 1.3) * 0.3;
-    }
-    const kind = expr === 'angry' ? 'steam' : drunk >= 2 ? 'bubble' : null;
+    const kind = data.crying ? 'tear' : expr === 'angry' && !standing ? 'steam' : drunk >= 2 && !standing ? 'bubble' : null;
     puffs.forEach((p, i) => {
       if (!kind) { p.visible = false; return; }
       p.visible = true;
@@ -720,11 +813,87 @@ export function createCustomer(type) {
       if (kind === 'steam') {
         p.material.color.set('#ffffff'); p.position.set(side * (0.09 + ph * 0.06), 0.12 + ph * 0.28, -0.02);
         p.scale.setScalar(0.6 + ph * 1.3); p.material.opacity = (1 - ph) * 0.8;
+      } else if (kind === 'tear') {
+        p.material.color.set('#4fc3f7'); p.position.set(side * 0.05, -0.02 - ph * 0.3, 0.12 + ph * 0.05);
+        p.scale.set(0.3, 0.5, 0.3); p.material.opacity = (1 - ph) * 0.9;
       } else {
         p.material.color.set(i % 2 ? '#b3e5fc' : '#f8bbd0'); p.position.set(Math.sin(ph * 6 + i) * 0.08, 0.15 + ph * 0.35, 0.05);
         p.scale.setScalar(0.4 + ph * 0.6); p.material.opacity = (1 - ph) * 0.7;
       }
     });
+  }
+  return { group: g, animate };
+}
+
+// ======================= DÉP TỔ ONG =======================
+export function createSlipper() {
+  const g = new THREE.Group();
+  const sole = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.025, 0.26), M('#e53935', { roughness: 0.6 })); g.add(sole);
+  for (let i = 0; i < 6; i++) { const hole = cyl(0.01, 0.01, 0.027, M('#7f0000'), 6); hole.position.set(((i % 3) - 1) * 0.03, 0, -0.06 + Math.floor(i / 3) * 0.05); g.add(hole); }
+  const strap = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.012, 6, 16, Math.PI), M('#1e88e5')); strap.position.set(0, 0.01, 0.05); strap.rotation.y = Math.PI / 2; g.add(strap);
+  return g;
+}
+
+// ======================= NHÂN VẬT PHỤ: VỢ ĐÁNH GHEN, CÔNG AN =======================
+export function createNPC(kind) {
+  const g = new THREE.Group(); const root = new THREE.Group(); g.add(root);
+  const wife = kind === 'wife';
+  const skinC = wife ? '#f2c9a8' : '#d9a07a';
+  const skin = M(skinC), cloth = M(wife ? '#f48fb1' : '#5d7a3a'), pants = M(wife ? '#f48fb1' : '#4a6430');
+  root.position.y = 0.39;
+  const pelvis = sph(0.16, pants); pelvis.scale.set(1.1, 0.6, 1); pelvis.position.y = 0.5; root.add(pelvis);
+  const legs = buildLegs(root, pants, wife ? '#e53935' : '#111');
+  const upper = new THREE.Group(); upper.position.y = 0.5; root.add(upper);
+  const torso = cyl(wife ? 0.14 : 0.15, wife ? 0.18 : 0.16, 0.42, cloth); torso.position.y = 0.24; upper.add(torso);
+  if (wife) { // hoa văn đồ bộ
+    for (let i = 0; i < 10; i++) { const f = sph(0.018, M(i % 2 ? '#fff176' : '#ffffff'), 6, 4); const a = i * 1.3; f.position.set(Math.cos(a) * 0.155, 0.08 + (i % 5) * 0.07, Math.sin(a) * 0.155); upper.add(f); }
+  }
+  const neck = cyl(0.045, 0.05, 0.08, skin); neck.position.y = 0.48; upper.add(neck);
+  const headG = new THREE.Group(); headG.position.y = 0.6; upper.add(headG);
+  headG.add(sph(0.12, skin, 24, 18));
+  const { fctx, ft } = makeFace(headG, wife ? 'wife' : 'police');
+  drawCustomerFace(fctx, wife ? 'wife' : 'police', 'angry'); ft.needsUpdate = true;
+  const arms = buildArms(upper, cloth, skin);
+  if (wife) {
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.13, 20, 12, 0, Math.PI * 2, 0, 1.3), M('#3e2723')); headG.add(hair);
+    const curlers = ['#ff4081', '#40c4ff', '#ffd54f', '#69f0ae', '#ff4081'];
+    curlers.forEach((c, i) => { const cu = cyl(0.025, 0.025, 0.09, M(c), 10); cu.rotation.z = Math.PI / 2; cu.position.set(0, 0.09 + Math.cos(i) * 0.02, -0.1 + i * 0.05); cu.position.y = 0.1 + Math.sin(i * 0.8) * 0.02; headG.add(cu); });
+    // tay phải: dép tổ ong ; tay trái: chổi lông gà
+    const dep = createSlipper(); dep.rotation.x = Math.PI / 2; dep.position.set(0, 0.0, 0.32); arms[1].el.add(dep);
+    const broom = new THREE.Group();
+    const stick = cyl(0.012, 0.012, 0.6, M('#8d6e63'), 8); stick.position.y = 0.3; broom.add(stick);
+    ['#ff7043', '#ffd54f', '#4fc3f7', '#ab47bc', '#66bb6a'].forEach((c, i) => { const f = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.25, 6), M(c)); f.position.set(Math.cos(i * 1.25) * 0.03, 0.68, Math.sin(i * 1.25) * 0.03); f.rotation.set(Math.cos(i) * 0.4, 0, Math.sin(i) * 0.4); broom.add(f); });
+    broom.position.set(0, 0, 0.28); broom.rotation.x = Math.PI / 2 - 0.3; arms[-1].el.add(broom);
+    g.userData.dep = dep;
+  } else {
+    const cap = cyl(0.13, 0.12, 0.08, M('#4a6430'), 20); cap.position.y = 0.11; headG.add(cap);
+    const top = cyl(0.16, 0.13, 0.03, M('#4a6430'), 20); top.position.y = 0.16; headG.add(top);
+    const band = cyl(0.132, 0.132, 0.025, M('#c62828'), 20); band.position.y = 0.09; headG.add(band);
+    const bill = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.015, 0.1), M('#111')); bill.position.set(0, 0.07, 0.15); headG.add(bill);
+    const star = cyl(0.025, 0.025, 0.01, M('#ffd54f', { metalness: 0.8 }), 5); star.rotation.x = Math.PI / 2; star.position.set(0, 0.13, 0.135); headG.add(star);
+    const belt = cyl(0.165, 0.165, 0.04, M('#3e2723'), 20); belt.position.y = 0.04; upper.add(belt);
+    const whistle = cyl(0.012, 0.012, 0.05, M('#cfd8dc', { metalness: 0.9 }), 8); whistle.rotation.z = Math.PI / 2; arms[1].el.add(whistle); whistle.position.set(0, 0, 0.3);
+  }
+  function animate(t, mode, moving) {
+    upper.rotation.set(0, 0, 0); headG.rotation.set(0, 0, 0);
+    for (const s of [-1, 1]) { arms[s].sh.rotation.set(0, 0, s * 0.12); arms[s].el.rotation.set(0, 0, 0); legs[s].hip.rotation.set(0, 0, 0); legs[s].knee.rotation.set(0, 0, 0); }
+    if (moving) walkPose(legs, null, t, 0.6);
+    if (mode === 'angry' || mode === 'walk') {
+      // vung dép lên trời, lắc đầu
+      arms[1].sh.rotation.set(-2.6 + Math.sin(t * 10) * 0.35, 0, 0.2); arms[1].el.rotation.x = -0.5;
+      headG.rotation.y = Math.sin(t * 8) * 0.2; upper.rotation.x = 0.1;
+    } else if (mode === 'pull') {
+      // tay trái nhéo tai chồng, tay phải chống nạnh vung dép
+      arms[-1].sh.rotation.set(-1.4, 0, 0.6); arms[-1].el.rotation.set(-0.4, 0, 0);
+      arms[1].sh.rotation.set(-2.4 + Math.sin(t * 9) * 0.4, 0, 0.3);
+      upper.rotation.z = Math.sin(t * 5) * 0.08;
+    } else if (mode === 'throw') {
+      arms[1].sh.rotation.set(-0.6, 0, 0.2);
+    } else if (mode === 'whistle') {
+      arms[1].sh.rotation.set(-2.4, 0, 0.3); arms[1].el.rotation.set(-1.4, 0, 0);
+      arms[-1].sh.rotation.set(-1.4, 0, -0.3); // tay chỉ
+      headG.rotation.y = Math.sin(t * 2) * 0.5;
+    }
   }
   return { group: g, animate };
 }
