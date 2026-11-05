@@ -60,6 +60,7 @@ export async function runMinigame(kind, ctx) {
       case 'duet': return await duet(ctx);
       case 'dance': return await dance(ctx);
       case 'chat': return await chat(ctx);
+      case 'pole': return await pole(ctx);
       default: open = false; return 0.5;
     }
   } catch (e) { console.error(e); open = false; root().classList.remove('show'); return 0.5; }
@@ -251,5 +252,48 @@ function chat(ctx) {
       const q = ans[+b.dataset.i][1];
       end(q, q >= 0.85 ? 'Khách cười ha hả! 😆' : q >= 0.5 ? 'Khách gật gù 🙂' : 'Khách quê độ... 😬');
     });
+  });
+}
+
+// ---------- ✨ Múa cột: bấm đúng lúc kim nằm trong vùng sáng ----------
+function pole(ctx) {
+  const body = shell('✨ Múa cột', `Diễn cho <b>${ctx.cname}</b> xem! Bấm <b>XOAY</b> (hoặc Space) khi kim nằm trong vùng hồng`);
+  hideTimer();
+  body.innerHTML = `<canvas class="mg-canvas wide" width="360" height="70"></canvas><div class="mg-show" style="font-size:28px;height:44px"></div><button class="mg-big pink" id="spin">XOAY ✨</button>`;
+  const cv = body.querySelector('canvas'), c = cv.getContext('2d'), info = body.querySelector('.mg-show');
+  const TRICKS = ['Xoay vòng 🌀', 'Leo cột 🧗‍♀️', 'Ngả người 💫', 'Xoay tụt 🔥'];
+  const ROUNDS = 4;
+  let round = 0, hits = 0, pos = 0, dir = 1, done = false, zone = null, wait = false;
+  const newZone = () => { const w = 0.22 - round * 0.035; const a = 0.1 + Math.random() * (0.8 - w); zone = [a, a + w]; };
+  newZone();
+  return new Promise((res) => {
+    const press = () => {
+      if (done || wait) return;
+      const ok = pos >= zone[0] && pos <= zone[1];
+      if (ok) hits++;
+      info.textContent = ok ? TRICKS[round] : 'Trượt tay 😵';
+      info.style.color = ok ? '#ffd54f' : '#ff8a80';
+      round++; wait = true;
+      setTimeout(() => {
+        wait = false; info.textContent = '';
+        if (round >= ROUNDS) { done = true; const q = hits / ROUNDS; finish(q, q >= 0.85 ? 'Cả phòng vỗ tay rần rần! 👏🔥' : q >= 0.5 ? 'Diễn cũng được nha 👍' : 'Lần sau tập thêm nha 😅').then(res); }
+        else newZone();
+      }, 700);
+    };
+    body.querySelector('#spin').addEventListener('pointerdown', (e) => { e.preventDefault(); press(); });
+    onKey((e) => { if (e.code === 'Space' && !e.repeat) { e.preventDefault(); press(); } });
+    let last = performance.now();
+    const loop = (now) => {
+      const dt = (now - last) / 1000; last = now;
+      if (!wait) { pos += dir * dt * (0.75 + round * 0.18); if (pos > 1) { pos = 1; dir = -1; } if (pos < 0) { pos = 0; dir = 1; } }
+      c.clearRect(0, 0, 360, 70);
+      c.fillStyle = 'rgba(255,255,255,0.12)'; c.fillRect(10, 25, 340, 20);
+      c.fillStyle = '#ff4fa3'; c.fillRect(10 + zone[0] * 340, 25, (zone[1] - zone[0]) * 340, 20);
+      c.fillStyle = '#fff'; c.fillRect(10 + pos * 340 - 3, 15, 6, 40);
+      c.fillStyle = '#ffd54f'; c.font = 'bold 14px sans-serif'; c.textAlign = 'left';
+      c.fillText('★'.repeat(hits) + '☆'.repeat(Math.max(0, round - hits)) + ' ' + (round + 1 > ROUNDS ? '' : `Động tác ${round + 1}/${ROUNDS}`), 10, 12);
+      if (!done) requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
   });
 }

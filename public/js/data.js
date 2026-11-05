@@ -69,8 +69,9 @@ export const REQ_TEXT = {
   fruit: () => 'Gọi đĩa trái cây nha',
   water: () => 'Cho ly nước chanh, xỉn quá...',
   dance: () => 'Nhảy cho anh coi đi!',
+  pole: () => 'Múa cột cho anh xem đi!',
 };
-export const REQ_ICON = { song: '🎵', beer: '🍺', cheers: '🥂', duet: '🎤', chat: '💬', fruit: '🍉', water: '🍋', dance: '💃' };
+export const REQ_ICON = { song: '🎵', beer: '🍺', cheers: '🥂', duet: '🎤', chat: '💬', fruit: '🍉', water: '🍋', dance: '💃', pole: '✨' };
 
 export const GENRES = ['Bolero', 'Nhạc trẻ', 'K-pop', 'Rap', 'Remix'];
 // Tên bài hát đều là tên bịa cho vui

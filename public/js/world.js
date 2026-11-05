@@ -9,6 +9,14 @@ export const ROOM_DEFS = [
 ];
 export const BAR = { x: -16.5, z: 4.2 };
 export const MIRROR = { x: 16.5, z: 4.2 };
+// cột múa: 1 cột trong mỗi phòng + 1 sân khấu ở sảnh
+export const POLES = [
+  { x: -13 + 3.4, z: -11 + 1.0, roomId: 0 },
+  { x: 0 + 3.4, z: -11 + 1.0, roomId: 1 },
+  { x: 13 + 3.4, z: -11 + 1.0, roomId: 2 },
+  { x: 0 + 4.6, z: 14 - 1.2, roomId: 3 },
+  { x: -7.5, z: 1.5, roomId: null },
+];
 
 // vị trí ghế khách
 export function seatTransform(roomId, seat) {
@@ -205,6 +213,20 @@ export function buildWorld(scene) {
   lobbyLights[0].position.set(-10, 3, 1); lobbyLights[1].position.set(10, 3, 1); lobbyLights[2].position.set(0, 3, 2);
   lobbyLights.forEach((l) => scene.add(l));
 
+  // ---------- cột múa inox + bục đèn ----------
+  const chrome = new THREE.MeshStandardMaterial({ color: '#e8e8f0', metalness: 1, roughness: 0.12 });
+  const poleRings = [];
+  for (const pl of POLES) {
+    const big = pl.roomId === null;
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(big ? 1.1 : 0.7, big ? 1.15 : 0.75, 0.05, 40), new THREE.MeshStandardMaterial({ color: '#1a0f22', metalness: 0.6, roughness: 0.25 }));
+    base.position.set(pl.x, 0.025, pl.z); scene.add(base);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(big ? 1.12 : 0.72, 0.025, 8, 60), new THREE.MeshBasicMaterial({ color: '#ff4fa3' }));
+    ring.rotation.x = Math.PI / 2; ring.position.set(pl.x, 0.055, pl.z); scene.add(ring); poleRings.push(ring);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 2.95, 16), chrome);
+    pole.position.set(pl.x, 1.5, pl.z); scene.add(pole);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.05, 16), chrome); cap.position.set(pl.x, 2.97, pl.z); scene.add(cap);
+    const spot = new THREE.PointLight('#ff7ac1', 5, 4, 2); spot.position.set(pl.x, 2.6, pl.z + 0.3); scene.add(spot);
+  }
   let lastTV = 0;
   function update(t, upgrades) {
     if (t - lastTV > 0.1) { drawTV(t); lastTV = t; }
@@ -217,6 +239,7 @@ export function buildWorld(scene) {
       discoBalls[i].visible = !!upgrades.disco;
       discoBalls[i].rotation.y = t * 1.5;
     }
+    poleRings.forEach((r, i) => r.material.color.setHSL(((t * 0.15 + i * 0.2) % 1), 0.9, 0.6));
   }
 
   return { colliders, update, setVipOpen };

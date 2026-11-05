@@ -398,7 +398,7 @@ export function createGirl(app) {
   // ---------------- hoạt ảnh ----------------
   function setExpr(e) { if (e === curExpr) return; curExpr = e; if (current) { drawFace(faceCtx, current, e); faceTex.needsUpdate = true; } }
   function animate(anim, t, moveAmt, holding) {
-    setExpr(anim === 'dance' || anim === 'wave' ? 'smile' : anim === 'sing' ? (Math.sin(t * 9) > -0.3 ? 'sing' : 'smile') : 'none');
+    setExpr(anim === 'dance' || anim === 'wave' || anim === 'pole' ? 'smile' : anim === 'sing' ? (Math.sin(t * 9) > -0.3 ? 'sing' : 'smile') : 'none');
     const swingAmp = longSkirt ? 0.22 : 0.5;
     const phase = t * 9;
     for (const s of [-1, 1]) {
@@ -408,6 +408,7 @@ export function createGirl(app) {
       legs[s].knee.rotation.set(0, 0, 0);
     }
     body.position.set(0, 0, 0);
+    body.rotation.order = 'XYZ';
     body.rotation.set(0, 0, 0);
     headPivot.rotation.set(0, 0, 0);
     mic.visible = false;
@@ -458,6 +459,42 @@ export function createGirl(app) {
           legs[s].hip.rotation.z = s * Math.max(0, sw * s) * 0.25; legs[s].knee.rotation.x = Math.max(0, -sw * s) * 0.5;
         }
         headPivot.rotation.z = sw * 0.35;
+      }
+    } else if (anim === 'pole') {
+      // nhóm (group) đặt ở tâm cột; thân xoay quanh cột, tay phải nắm cột
+      const ph = Math.floor(t / 5) % 3, lt = t % 5;
+      const spin = ph === 0 ? t * 1.6 : ph === 1 ? t * 3.2 : t * 1.1;
+      const R = 0.2;
+      body.rotation.order = 'YXZ';
+      body.position.set(Math.sin(spin) * R, 0, Math.cos(spin) * R);
+      body.rotation.y = spin + Math.PI / 2;
+      arms[1].sh.rotation.set(0, 0, 2.85); arms[1].elbow.rotation.set(0, 0, 0.1);
+      if (ph === 0) {
+        // đi vòng quanh cột, ưỡn người
+        body.rotation.z = 0.22; body.rotation.x = -0.08;
+        arms[-1].sh.rotation.set(0, 0, -1.2 - Math.sin(t * 3) * 0.3);
+        for (const s of [-1, 1]) {
+          const sw = Math.sin(t * 6 + (s > 0 ? Math.PI : 0)) * 0.35;
+          legs[s].hip.rotation.x = -sw; legs[s].knee.rotation.x = Math.max(0, sw) * 0.6;
+        }
+        headPivot.rotation.z = 0.25; headPivot.rotation.x = -0.15;
+      } else if (ph === 1) {
+        // leo lên rồi xoay tròn tụt xuống (fireman spin)
+        const h = lt < 1.2 ? (lt / 1.2) * 0.55 : 0.55 * (1 - (lt - 1.2) / 3.8);
+        body.position.y = h;
+        body.rotation.z = 0.35;
+        arms[-1].sh.rotation.set(0, 0, 2.3); arms[-1].elbow.rotation.set(0, 0, -0.6);
+        legs[1].hip.rotation.set(-1.3, 0, 0.2); legs[1].knee.rotation.x = 1.5;
+        legs[-1].hip.rotation.set(-0.5, 0, -0.35); legs[-1].knee.rotation.x = 0.2;
+        headPivot.rotation.z = 0.4; headPivot.rotation.x = -0.25;
+      } else {
+        // ngồi vắt chân trên cao, ngả người ra sau, xoay chậm
+        body.position.y = 0.75 + Math.sin(t * 2) * 0.03;
+        body.rotation.z = 0.15; body.rotation.x = -0.35;
+        arms[-1].sh.rotation.set(-0.3, 0, -1.7 - Math.sin(t * 2) * 0.25);
+        legs[1].hip.rotation.set(-1.5, 0, 0.35); legs[1].knee.rotation.x = 1.7;
+        legs[-1].hip.rotation.set(-1.0, 0, -0.25); legs[-1].knee.rotation.x = 0.9 + Math.sin(t * 2) * 0.2;
+        headPivot.rotation.x = -0.4; headPivot.rotation.z = Math.sin(t * 1.5) * 0.15;
       }
     } else if (anim === 'wave') {
       arms[1].sh.rotation.z = 2.6;

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createGirl, createCustomer, makeLabel, roundRect } from './character.js';
-import { buildWorld, seatTransform, BAR, MIRROR, ROOM_DEFS } from './world.js';
+import { buildWorld, seatTransform, BAR, MIRROR, ROOM_DEFS, POLES } from './world.js';
 import { runMinigame, isMinigameOpen } from './minigames.js';
 import * as D from './data.js';
 import { initMusic, setZone, toggleMusic, musicOn } from './music.js';
@@ -271,6 +271,7 @@ function removeCustomerObj(id) {
 // ================= Interaction =================
 let near = null;
 function findNear() {
+  for (const pl of POLES) if (Math.hypot(pl.x - me.x, pl.z - me.z) < 1.3) return { type: 'pole', pole: pl };
   let best = null, bd = 3.1;
   for (const e of customers.values()) {
     const st = seatTransform(e.data.roomId, e.data.seat);
@@ -290,14 +291,18 @@ function updatePrompt() {
   let txt = '';
   if (near.type === 'bar') txt = `Nhấn <b>${key}</b> để lấy đồ ở quầy bar 🍹`;
   else if (near.type === 'mirror') txt = `Nhấn <b>${key}</b> để thay đồ & makeup 💄`;
-  else {
+  else if (near.type === 'pole') {
+    const c = poleCustomer();
+    txt = c ? `Nhấn <b>${key}</b> để múa cột cho <b>${D.CUSTOMER_TYPES[c.type].name}</b> ✨` : `Nhấn <b>${key}</b> để múa cột ✨`;
+  } else {
     const c = near.e.data, info = D.CUSTOMER_TYPES[c.type];
     if (c.servedBy && c.servedBy !== myId) txt = `${info.name} đang được <b>${c.servedName}</b> phục vụ`;
     else {
       const k = c.request.kind;
       const fetch = k === 'fruit' || k === 'water';
       const likes = info.likes === 'any' ? 'gì cũng được (miễn rẻ 😂)' : D.STYLE_NAMES[info.likes];
-      if (fetch && me.holding !== k) txt = `${info.name}: ${D.REQ_TEXT[k]()} → ra <b>Quầy bar</b> lấy ${D.REQ_ICON[k]}`;
+      if (k === 'pole') txt = `${info.name}: ${D.REQ_TEXT[k]()} → ra <b>cột inox</b> trong phòng rồi nhấn ${key} ✨`;
+      else if (fetch && me.holding !== k) txt = `${info.name}: ${D.REQ_TEXT[k]()} → ra <b>Quầy bar</b> lấy ${D.REQ_ICON[k]}`;
       else txt = `Nhấn <b>${key}</b> để ${D.REQ_ICON[k]} ${fetch ? 'đưa đồ cho khách' : D.REQ_TEXT[k](c.request.data).toLowerCase()}<br><small>Gu khách: ${likes}</small>`;
     }
   }
@@ -311,6 +316,7 @@ async function interact() {
   if (!near) return;
   if (near.type === 'bar') { openModal('#barMenu'); return; }
   if (near.type === 'mirror') { openCreator(); return; }
+  if (near.type === 'pole') { poleDance(near.pole); return; }
   const c = near.e.data;
   const info = D.CUSTOMER_TYPES[c.type];
   if (c.servedBy && c.servedBy !== myId) { toast(`Khách đang được ${c.servedName} phục vụ rồi`); return; }
@@ -319,6 +325,7 @@ async function interact() {
   // mặt hướng về khách
   const st = seatTransform(c.roomId, c.seat);
   me.ry = Math.atan2(st.x - me.x, st.z - me.z);
+  if (k === 'pole') { toast(`Ra <b>cột inox</b> có bục đèn trong phòng rồi nhấn ${isMobile ? 'nút tròn' : 'E'} để múa cho khách xem ✨`); return; }
   if (k === 'fruit' || k === 'water') {
     if (me.holding === k) {
       const q = 0.55 + 0.45 * (c.patience / c.maxPatience);
@@ -336,6 +343,29 @@ async function interact() {
   me.busy = false;
   me.emoteUntil = animFor ? clock.elapsedTime + 2 : 0;
   socket.emit('resolve', { cid: c.id, kind: k, quality: q });
+  sfx(q >= 0.5 ? 'good' : 'bad');
+}
+// khách mình đang phục vụ (hoặc chưa ai phục vụ) đang đòi múa cột
+function poleCustomer() {
+  let best = null;
+  for (const e of customers.values()) {
+    const c = e.data;
+    if (c.request.kind !== 'pole' || (c.servedBy && c.servedBy !== myId)) continue;
+    if (!best || c.servedBy === myId) best = c;
+  }
+  return best;
+}
+async function poleDance(pl) {
+  me.x = pl.x; me.z = pl.z;
+  me.emote = 'pole'; me.emoteUntil = 1e9;
+  const c = poleCustomer();
+  if (!c) { toast('Đi chỗ khác là dừng múa nha ✨'); return; } // múa cho vui tới khi di chuyển
+  if (!c.servedBy) { socket.emit('serve', { cid: c.id }); c.servedBy = myId; }
+  me.busy = true;
+  const q = await runMinigame('pole', { type: c.type, cname: D.CUSTOMER_TYPES[c.type].name, data: {} });
+  me.busy = false;
+  me.emoteUntil = clock.elapsedTime + 3;
+  socket.emit('resolve', { cid: c.id, kind: 'pole', quality: q });
   sfx(q >= 0.5 ? 'good' : 'bad');
 }
 function releaseCustomer() {
