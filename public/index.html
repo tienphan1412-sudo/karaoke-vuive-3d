@@ -17,9 +17,20 @@
     <div class="start-card">
       <div class="logo">KTV <span>LUNG LINH</span> 3D</div>
       <p class="tag">Hóa thân thành bé xinh của quán, chiều khách hết mình, gom tiền bo nâng cấp quán!</p>
-      <input id="nameInput" maxlength="16" placeholder="Tên của bạn trong quán" />
-      <button id="btnCreate" class="btn primary">Tạo nhân vật ✨</button>
-      <div id="loadMsg" class="howto" style="text-align:center">Đang tải nhân vật 3D...</div>
+      <div id="resumeBox" class="hidden">
+        <div class="hello">Chào lại, <b id="resumeName"></b> 👋</div>
+        <button id="btnResume" class="btn primary wide">Vào chơi tiếp ✨</button>
+        <button id="btnSwitch" class="btn wide ghost">Đổi tài khoản khác</button>
+      </div>
+      <div id="authBox">
+        <div class="auth-tabs"><button data-mode="login" class="on">Đăng nhập</button><button data-mode="register">Tạo nhân vật mới</button></div>
+        <input id="nameInput" maxlength="16" placeholder="Tên nhân vật" autocomplete="username" />
+        <input id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="Mã PIN (4-6 số)" autocomplete="current-password" />
+        <div id="pinHint" class="howto hidden" style="margin-top:-4px;text-align:left">Nhớ kỹ mã PIN nha, lần sau vào bằng tên + PIN này để chơi tiếp.</div>
+        <button id="btnAuth" class="btn primary wide">Đăng nhập</button>
+        <div id="authMsg" class="auth-msg"></div>
+      </div>
+      <div id="loadMsg" class="howto" style="text-align:center"></div>
       <div class="howto">
         <b>Cách chơi:</b> Đi bằng <kbd>W A S D</kbd> / joystick · Kéo chuột để xoay camera · Lại gần khách nhấn <kbd>E</kbd> để phục vụ ·
         Khách gọi trái cây/nước chanh thì ra <b>Quầy bar</b> lấy · Mặc đúng gu khách được bo gấp rưỡi!
@@ -86,7 +97,7 @@
       <li>Làm tốt thì khách vui và bo nóng. Phục vụ xong 3-5 yêu cầu thì khách bo lớn rồi về.</li>
       <li>Mỗi khách có gu riêng: <b>Đại Gia</b> mê lộng lẫy, <b>Chú Bolero</b> và <b>Oppa</b> mê ngoan hiền, <b>Sếp Nhậu</b> và <b>Gen Z</b> mê gợi cảm. Mặc đúng gu được bo x1.5.</li>
       <li>30% tiền bo vào quỹ quán, ai cũng mua nâng cấp được. Nhấn <kbd>Q</kbd> để nhường khách cho bạn khác.</li>
-    </ul><button class="btn close">Đã hiểu</button></div></div>
+    </ul><button class="btn close">Đã hiểu</button><button id="btnLogout" class="btn wide ghost" style="margin-top:8px">Đăng xuất</button></div></div>
 
   <div id="mg"></div>
   <div id="toast"></div>

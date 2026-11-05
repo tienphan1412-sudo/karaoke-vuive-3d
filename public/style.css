@@ -25,7 +25,7 @@ kbd { background: rgba(255,255,255,.15); border-radius: 4px; padding: 1px 6px; f
 .logo span { color: var(--pink); }
 .tag { opacity: .85; margin: 8px 0 18px; }
 #nameInput { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: rgba(0,0,0,.35); color: #fff; font-size: 16px; font-family: inherit; margin-bottom: 12px; }
-#btnCreate { width: 100%; padding: 13px; font-size: 16px; }
+
 .howto { margin-top: 16px; font-size: 13px; line-height: 1.6; opacity: .8; text-align: left; }
 
 /* creator */
@@ -151,3 +151,14 @@ input[type=range] { width: 100%; accent-color: var(--pink); }
   .prompt { bottom: 170px; font-size: 13px; }
   .holding { bottom: 136px; }
 }
+
+/* đăng nhập */
+.btn.wide { width: 100%; padding: 13px; font-size: 16px; margin-top: 8px; }
+.btn.ghost { background: transparent; }
+.hello { font-size: 18px; margin: 4px 0 6px; }
+.auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; background: rgba(0,0,0,.3); padding: 4px; border-radius: 12px; }
+.auth-tabs button { background: none; border: none; color: rgba(255,255,255,.7); padding: 9px; border-radius: 9px; font-weight: 700; font-size: 14px; }
+.auth-tabs button.on { background: rgba(255,255,255,.14); color: #fff; }
+#pinInput { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: rgba(0,0,0,.35); color: #fff; font-size: 16px; font-family: inherit; margin-bottom: 12px; letter-spacing: 4px; }
+.auth-msg { min-height: 20px; margin-top: 10px; color: #ff8a80; font-size: 14px; }
+.board h4.top { margin-top: 10px; }
