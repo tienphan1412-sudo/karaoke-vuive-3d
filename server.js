@@ -81,6 +81,7 @@ function pubCustomer(c) {
     servedBy: c.servedBy, servedName: c.servedName, request: c.request,
     patience: Math.max(0, Math.round(c.patience)), maxPatience: c.maxPatience,
     line: c.line, lineAt: c.lineAt, done: c.done, need: c.need,
+    drunk: c.drunk || 0, react: c.react || null, reactAt: c.reactAt || 0,
   };
 }
 const broadcastCustomers = () => io.emit('customers', Object.values(state.customers).map(pubCustomer));
@@ -90,7 +91,8 @@ function say(c, line) { c.line = line; c.lineAt = Date.now(); }
 function newRequest(c) {
   const T = TYPES[c.type];
   const options = T.reqs.filter((k) => !c.request || k !== c.request.kind);
-  const kind = pick(options.length ? options : T.reqs);
+  let kind = pick(options.length ? options : T.reqs);
+  if ((c.drunk || 0) >= 2 && Math.random() < 0.5 && (!c.request || c.request.kind !== 'water')) kind = 'water';
   const data = {};
   if (kind === 'song') data.genre = Math.random() < 0.75 ? T.genre : pick(GENRES);
   c.request = { kind, data };
@@ -109,7 +111,7 @@ function spawnCustomer() {
   const [roomId, seat] = pick(free);
   const keys = ROOMS[roomId].vip ? ['daigia', 'oppa', 'sep'] : Object.keys(TYPES);
   const type = pick(keys);
-  const c = { id: nextId++, type, roomId, seat, mood: 60, servedBy: null, servedName: null, done: 0, need: rand(3, 5), request: null };
+  const c = { id: nextId++, type, roomId, seat, mood: 60, servedBy: null, servedName: null, done: 0, need: rand(3, 5), request: null, drunk: type === 'sep' || type === 'daigia' ? 1 : 0, react: null, reactAt: 0 };
   say(c, LINES.arrive[type]);
   newRequest(c);
   state.customers[c.id] = c;
@@ -158,6 +160,7 @@ setInterval(() => {
     c.patience -= c.servedBy ? 1 : 0.5;
     if (c.patience <= 0) {
       c.mood -= 15;
+      c.react = 'bad'; c.reactAt = Date.now();
       say(c, c.servedBy ? pick(LINES.timeout) : pick(LINES.idle));
       if (c.mood <= 0) {
         say(c, 'Lần sau anh qua quán khác!');
@@ -241,6 +244,12 @@ io.on('connection', (socket) => {
     const q = clamp(Number(quality) || 0, 0, 1);
     c.mood = clamp(c.mood + Math.round(q * 30 - (1 - q) * 15), 0, 100);
     say(c, q >= 0.5 ? pick(LINES.good) : pick(LINES.bad));
+    c.react = q >= 0.5 ? 'good' : 'bad'; c.reactAt = Date.now();
+    if ((kind === 'beer' || kind === 'cheers') && q >= 0.5) {
+      c.drunk = Math.min(3, (c.drunk || 0) + 1);
+      if (c.drunk === 3) say(c, 'Hức... anh hông có say... hức!');
+    }
+    if (kind === 'water') { c.drunk = Math.max(0, (c.drunk || 0) - 2); if (q >= 0.5) say(c, 'Tỉnh rồi! Cảm ơn em nha'); }
     const T = TYPES[c.type];
     if (q >= 0.85) {
       const hot = Math.max(10, Math.round((T.tip * 0.1) / 10) * 10);
