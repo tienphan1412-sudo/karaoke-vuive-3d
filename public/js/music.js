@@ -169,3 +169,22 @@ export function toggleMusic() {
 }
 export const musicOn = () => enabled;
 export function duck(on) { if (master && ctx) master.gain.setTargetAtTime(on ? 0.2 : 0.6, ctx.currentTime, 0.2); }
+
+// ---------- dùng cho quay video ----------
+let recDest = null, sfxBus = null;
+export function audioOut() {
+  // nơi tiếng hiệu ứng (sfx) đổ vào, để nó vừa ra loa vừa vào video
+  if (!ctx) return null;
+  if (!sfxBus) { sfxBus = ctx.createGain(); sfxBus.connect(ctx.destination); if (recDest) sfxBus.connect(recDest); }
+  return { ctx, node: sfxBus };
+}
+export function recordAudioTrack() {
+  if (!ctx) return null;
+  if (ctx.state === 'suspended') ctx.resume();
+  if (!recDest) {
+    recDest = ctx.createMediaStreamDestination();
+    master.connect(recDest);
+    if (sfxBus) sfxBus.connect(recDest);
+  }
+  return recDest.stream.getAudioTracks()[0] || null;
+}

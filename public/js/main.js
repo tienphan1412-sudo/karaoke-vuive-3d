@@ -3,7 +3,7 @@ import { createGirl, createCustomer, createNPC, createSlipper, makeLabel, roundR
 import { buildWorld, seatTransform, BAR, MIRROR, ROOM_DEFS, POLES, EXIT, BREAKER, SHOPSPOT } from './world.js';
 import { runMinigame, isMinigameOpen, getLastScore, setMgFeatures } from './minigames.js';
 import * as D from './data.js';
-import { initMusic, setZone, toggleMusic, musicOn } from './music.js';
+import { initMusic, setZone, toggleMusic, musicOn, audioOut, recordAudioTrack } from './music.js';
 
 const $ = (s) => document.querySelector(s);
 const store = {
@@ -28,7 +28,19 @@ const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.03, 2
 const hemi = new THREE.HemisphereLight('#ffd6f0', '#2a1040', 1.6); scene.add(hemi);
 const amb = new THREE.AmbientLight('#ffffff', 0.35); scene.add(amb);
 const sun = new THREE.DirectionalLight('#fff0f6', 1.0); sun.position.set(5, 10, 8); scene.add(sun);
-addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
+// màn hình dọc (điện thoại): mở rộng góc nhìn + lùi camera xa hơn, nhìn chéo từ trên cao để thấy được như máy tính
+let portrait = false, camMul = 1;
+const playFov = () => (camMode === 'creator' ? 55 : portrait ? 68 : innerWidth / innerHeight < 1.3 ? 60 : 55);
+function fitView() {
+  renderer.setSize(innerWidth, innerHeight);
+  const asp = innerWidth / innerHeight;
+  portrait = asp < 0.9;
+  camera.aspect = asp;
+  camera.fov = playFov();
+  camMul = portrait ? 1.55 : 1;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', fitView);
 
 const world = buildWorld(scene);
 const isMobile = matchMedia('(max-width: 800px), (pointer: coarse)').matches;
@@ -56,10 +68,13 @@ scene.add(myLabel.sprite);
 // ================= Camera =================
 let camYaw = 0, camPitch = 0.55, camDist = 4.4;
 let camMode = 'play'; // play | creator
+fitView();
+if (isMobile) document.getElementById('chatInput').placeholder = '💬 Chat...';
 let creatorView = 'full';
 const camTarget = new THREE.Vector3();
 function updateCamera(dt) {
   const h = app.height || 1;
+  const fv = playFov(); if (camera.fov !== fv) { camera.fov = fv; camera.updateProjectionMatrix(); }
   let pos, target;
   if (camMode === 'creator') {
     const fx = Math.sin(me.ry), fz = Math.cos(me.ry);
@@ -88,13 +103,14 @@ function updateCamera(dt) {
     let px = -az / L, pz = ax / L;
     if (px * (me.x - mx) + pz * (me.z - mz) > 0) { px = -px; pz = -pz; }
     target = new THREE.Vector3(mx, 1.0, mz);
-    pos = new THREE.Vector3(mx + px * 3.4, 2.3, mz + pz * 3.4);
+    pos = new THREE.Vector3(mx + px * 3.4 * camMul, portrait ? 3.6 : 2.3, mz + pz * 3.4 * camMul);
   } else {
-    target = new THREE.Vector3(me.x, 1.2, me.z);
+    const cd = camDist * camMul, cp = portrait ? Math.min(1.25, camPitch + 0.3) : camPitch;
+    target = new THREE.Vector3(me.x, portrait ? 0.9 : 1.2, me.z);
     pos = new THREE.Vector3(
-      me.x + Math.sin(camYaw) * Math.cos(camPitch) * camDist,
-      1.2 + Math.sin(camPitch) * camDist,
-      me.z + Math.cos(camYaw) * Math.cos(camPitch) * camDist
+      me.x + Math.sin(camYaw) * Math.cos(cp) * cd,
+      target.y + Math.sin(cp) * cd,
+      me.z + Math.cos(camYaw) * Math.cos(cp) * cd
     );
   }
   if (camMode !== 'creator') {
@@ -136,6 +152,9 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Digit2') emote('dance');
   if (e.code === 'Digit3') emote('sing');
   if (e.code === 'Digit4') quickChange();
+  if (e.code === 'KeyP') takeShot();
+  if (e.code === 'KeyV') { if (rec) stopRec(); else openRecMenu(); }
+  if (e.code === 'KeyH') toggleClean();
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
@@ -474,14 +493,16 @@ function floater(html) {
 let actx = null;
 function sfx(kind) {
   try {
-    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const out = audioOut(); // dùng chung bộ âm thanh với nhạc để video quay có tiếng
+    actx = out ? out.ctx : (actx || new (window.AudioContext || window.webkitAudioContext)());
+    const dest = out ? out.node : actx.destination;
     const notes = { good: [660, 880], bad: [300, 220], tip: [784, 988, 1319], coin: [1319, 1568], ghen: [880, 660, 440, 330], bop: [180, 90], siren: [700, 950, 700, 950, 700, 950], level: [523, 659, 784, 1047, 1319], alarm: [988, 784, 988, 784] }[kind] || [440];
     notes.forEach((f, i) => {
       const o = actx.createOscillator(), g = actx.createGain();
       o.type = kind === 'bad' || kind === 'ghen' || kind === 'bop' ? 'sawtooth' : kind === 'siren' ? 'square' : 'triangle'; o.frequency.value = f;
       const t0 = actx.currentTime + i * (kind === 'siren' ? 0.35 : 0.09);
       g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.18, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
-      o.connect(g).connect(actx.destination); o.start(t0); o.stop(t0 + 0.25);
+      o.connect(g).connect(dest); o.start(t0); o.stop(t0 + 0.25);
     });
   } catch (e) {}
 }
@@ -1355,6 +1376,130 @@ function quickChange() {
 }
 $('#btnQuick').addEventListener('click', quickChange);
 
+
+// =====================================================================
+// 📷 CHỤP MÀN HÌNH, 🎥 QUAY VIDEO, ⛶ TOÀN MÀN HÌNH, 🙈 THU GỌN
+// Ảnh/video lấy thẳng từ cảnh 3D (không dính nút bấm) + logo góc dưới.
+// =====================================================================
+const GAME_URL = location.host;
+let wantShot = false, rec = null;
+const stamp = () => { const d = new Date(), z = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}`; };
+function drawWatermark(ctx, W, H) {
+  const s = Math.max(0.6, Math.min(W, H) / 720);
+  ctx.save();
+  ctx.font = `800 ${Math.round(26 * s)}px "Be Vietnam Pro", sans-serif`;
+  const t1 = '✨ KTV LUNG LINH 3D';
+  ctx.font = `800 ${Math.round(26 * s)}px "Be Vietnam Pro", sans-serif`;
+  const w1 = ctx.measureText(t1).width;
+  ctx.font = `600 ${Math.round(15 * s)}px "Be Vietnam Pro", sans-serif`;
+  const w2 = ctx.measureText(GAME_URL).width;
+  const bw = Math.max(w1, w2) + 28 * s, bh = 66 * s, x = W - bw - 16 * s, y = H - bh - 16 * s;
+  ctx.fillStyle = 'rgba(20,6,30,0.55)'; roundRect(ctx, x, y, bw, bh, 14 * s); ctx.fill();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `800 ${Math.round(26 * s)}px "Be Vietnam Pro", sans-serif`; ctx.fillStyle = '#ff4fa3'; ctx.fillText(t1, x + bw / 2, y + 24 * s);
+  ctx.font = `600 ${Math.round(15 * s)}px "Be Vietnam Pro", sans-serif`; ctx.fillStyle = '#fff'; ctx.fillText(GAME_URL, x + bw / 2, y + 49 * s);
+  ctx.restore();
+}
+// vẽ khung hình 3D (đã cắt theo tỉ lệ) lên canvas 2D
+function blitScene(ctx, W, H) {
+  const src = renderer.domElement, sw = src.width, sh = src.height;
+  const want = W / H; let cw = sw, ch = sh;
+  if (sw / sh > want) cw = sh * want; else ch = sw / want;
+  ctx.drawImage(src, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, W, H);
+  drawWatermark(ctx, W, H);
+}
+async function saveBlob(blob, name) {
+  const file = new File([blob], name, { type: blob.type });
+  // điện thoại: mở bảng chia sẻ để lưu vào Ảnh / đăng thẳng TikTok
+  if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: 'KTV Lung Linh 3D' }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+function takeShot() { if (joined) wantShot = true; }
+function afterRender() {
+  if (wantShot) {
+    wantShot = false;
+    const src = renderer.domElement, c = document.createElement('canvas');
+    c.width = src.width; c.height = src.height;
+    blitScene(c.getContext('2d'), c.width, c.height);
+    const f = $('#shotFlash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+    sfx('coin');
+    c.toBlob((b) => { if (b) { saveBlob(b, `ktv-lunglinh-${stamp()}.png`); toast('📷 Đã chụp! Ảnh lưu trong thư mục Tải về (Downloads).'); } }, 'image/png');
+  }
+  if (rec) {
+    blitScene(rec.ctx, rec.c.width, rec.c.height);
+    const sec = Math.floor((performance.now() - rec.t0) / 1000);
+    if (sec !== rec.sec) { rec.sec = sec; $('#recTime').textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }
+    if (sec >= 180) stopRec();
+  }
+}
+function pickMime() {
+  const list = ['video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+  return list.find((m) => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || '';
+}
+function openRecMenu() {
+  if (!joined) return;
+  if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) { toast('Trình duyệt này chưa hỗ trợ quay video. Dùng Chrome bản mới nha!'); return; }
+  closeModals(); $('#recMenu').classList.add('show');
+}
+function startRec(kind) {
+  $('#recMenu').classList.remove('show');
+  const [W, H] = kind === 'v' ? [720, 1280] : [1280, 720];
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  blitScene(ctx, W, H);
+  const stream = c.captureStream(30);
+  const at = recordAudioTrack(); if (at) stream.addTrack(at);
+  const mime = pickMime();
+  let mr;
+  try { mr = new MediaRecorder(stream, { mimeType: mime || undefined, videoBitsPerSecond: 6_000_000, audioBitsPerSecond: 128_000 }); }
+  catch (e) { toast('Không quay được trên trình duyệt này 😢'); return; }
+  const chunks = [];
+  mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+  mr.onstop = () => {
+    stream.getVideoTracks().forEach((t) => t.stop());
+    const type = mr.mimeType || mime || 'video/webm';
+    const blob = new Blob(chunks, { type: type.split(';')[0] });
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    if (blob.size < 1000) { toast('Video trống, thử quay lại nha'); return; }
+    saveBlob(blob, `ktv-lunglinh-${stamp()}.${ext}`);
+    toast(ext === 'mp4' ? '🎬 Đã lưu video! Mở thư mục Tải về (Downloads) để đăng nha.' : '🎬 Đã lưu video (.webm). Nếu TikTok không nhận, đổi sang mp4 bằng CapCut hoặc dùng Chrome bản mới.');
+  };
+  mr.start(1000);
+  rec = { mr, c, ctx, t0: performance.now(), sec: -1 };
+  $('#recBar').classList.remove('hidden'); $('#btnRec').classList.add('on');
+  toast(kind === 'v' ? '🔴 Đang quay dọc 9:16. Nhân vật luôn ở giữa khung.' : '🔴 Đang quay ngang 16:9.');
+}
+function stopRec() {
+  if (!rec) return;
+  const r = rec; rec = null;
+  try { r.mr.stop(); } catch (e) {}
+  $('#recBar').classList.add('hidden'); $('#btnRec').classList.remove('on');
+}
+function toggleClean(force) {
+  const on = typeof force === 'boolean' ? force : !document.body.classList.contains('clean');
+  document.body.classList.toggle('clean', on);
+  $('#btnUnclean').classList.toggle('hidden', !on);
+}
+function toggleFull() {
+  const el = document.documentElement;
+  if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  else if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+  else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+}
+if (!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen)) $('#btnFull').style.display = 'none'; // iPhone không hỗ trợ
+document.addEventListener('fullscreenchange', () => { $('#btnFull').textContent = document.fullscreenElement ? '🗗' : '⛶'; });
+$('#btnShot').addEventListener('click', takeShot);
+$('#btnRec').addEventListener('click', () => (rec ? stopRec() : openRecMenu()));
+$('#btnRecStop').addEventListener('click', stopRec);
+document.querySelectorAll('[data-rec]').forEach((b) => b.addEventListener('click', () => startRec(b.dataset.rec)));
+$('#btnFull').addEventListener('click', toggleFull);
+$('#btnClean').addEventListener('click', () => toggleClean());
+$('#btnUnclean').addEventListener('click', () => toggleClean(false));
+
 // ================= Main loop =================
 const clock = new THREE.Clock();
 function loop() {
@@ -1398,6 +1543,7 @@ function loop() {
   setZone(zoneAt(me.x, me.z));
   sendMove(t);
   renderer.render(scene, camera);
+  afterRender();
 }
 camera.position.set(0, 3, 8);
 camYaw = 0;
@@ -1405,4 +1551,4 @@ loop();
 refreshStyleBadges();
 
 // cho phép chạy thử tự động
-window.__ktv = { quickChange, clickTo, get goto() { return goto; }, runMinigame, me, customers, players, socket, interact, setApp, openCreator, closeCreator, openStore, get app() { return app; }, get owned() { return owned; }, get myMoney() { return myMoney; }, scene, camera, renderer };
+window.__ktv = { takeShot, startRec, stopRec, toggleClean, quickChange, clickTo, get goto() { return goto; }, runMinigame, me, customers, players, socket, interact, setApp, openCreator, closeCreator, openStore, get app() { return app; }, get owned() { return owned; }, get myMoney() { return myMoney; }, scene, camera, renderer };
