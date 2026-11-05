@@ -1,0 +1,294 @@
+// KTV Lung Linh 3D — server online (Express + Socket.io)
+const express = require('express');
+const http = require('http');
+const path = require('path');
+const { Server } = require('socket.io');
+
+const app = express();
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/vendor/three', express.static(path.join(__dirname, 'node_modules', 'three')));
+app.use('/vendor/three-vrm', express.static(path.join(__dirname, 'node_modules', '@pixiv', 'three-vrm', 'lib')));
+app.get('/health', (req, res) => res.send('ok'));
+// danh sách file nhạc trong public/music (tự nhận mọi file mp3/m4a/ogg/wav)
+const fs = require('fs');
+app.get('/music-list', (req, res) => {
+  fs.readdir(path.join(__dirname, 'public', 'music'), (err, files) => {
+    if (err) return res.json([]);
+    res.json(files.filter((f) => /\.(mp3|m4a|ogg|wav|aac)$/i.test(f)));
+  });
+});
+
+const server = http.createServer(app);
+const io = new Server(server);
+const PORT = process.env.PORT || 3000;
+
+// ---------------- Dữ liệu game ----------------
+const ROOMS = [
+  { id: 0, seats: 2 },
+  { id: 1, seats: 2 },
+  { id: 2, seats: 2 },
+  { id: 3, seats: 3, vip: true },
+];
+const GENRES = ['Bolero', 'Nhạc trẻ', 'K-pop', 'Rap', 'Remix'];
+const OUTFIT_STYLE = {
+  xetaa: 'longlay', xoe: 'longlay', mermaid: 'longlay',
+  body: 'goicam', crop: 'goicam',
+  babydoll: 'ngoanhien', blazer: 'ngoanhien', casual: 'ngoanhien',
+};
+
+const TYPES = {
+  daigia: { name: 'Anh Đại Gia', likes: 'longlay', tip: 500, reqs: ['beer', 'cheers', 'fruit', 'dance', 'chat'], genre: 'Remix' },
+  bolero: { name: 'Chú Bolero', likes: 'ngoanhien', tip: 250, reqs: ['song', 'duet', 'chat', 'water'], genre: 'Bolero' },
+  sep:    { name: 'Sếp Nhậu', likes: 'goicam', tip: 350, reqs: ['cheers', 'beer', 'water', 'chat', 'song'], genre: 'Nhạc trẻ' },
+  keo:    { name: 'Thanh Niên Keo Kiệt', likes: 'any', tip: 60, reqs: ['chat', 'song', 'water', 'duet'], genre: 'Rap' },
+  oppa:   { name: 'Oppa Hàn Quốc', likes: 'ngoanhien', tip: 400, reqs: ['song', 'duet', 'dance', 'chat'], genre: 'K-pop' },
+  genz:   { name: 'Cậu Ấm Gen Z', likes: 'goicam', tip: 180, reqs: ['dance', 'song', 'chat', 'fruit'], genre: 'Nhạc trẻ' },
+};
+
+const LINES = {
+  arrive: {
+    daigia: 'Em ơi, hôm nay anh bao hết!',
+    bolero: 'Mở bolero cho chú nghe coi con...',
+    sep: 'Nay chốt được hợp đồng, quẩy!',
+    keo: 'Phòng này tính giờ hả em? Hát lẹ nha',
+    oppa: 'Annyeong! Karaoke Việt Nam vui quá!',
+    genz: 'Ủa phòng có wifi hông chị?',
+  },
+  good: ['Quá đã!', 'Em này được nè!', 'Hảo hảo!', '10 điểm không có nhưng!', 'Dzô 100%!', 'Đúng gu anh luôn!'],
+  bad: ['Gì kỳ vậy em...', 'Thôi bỏ đi...', 'Hơi buồn nha', 'Ủa alo?', 'Nhạt quá trời'],
+  timeout: ['Gọi nãy giờ mà em đâu rồi?!', 'Quán phục vụ chậm ghê', 'Ngồi mọc rễ luôn rồi'],
+  idle: ['Sao không ai tiếp anh vậy?', 'Có ai không ta?', 'Quán vắng nhân viên hả?'],
+};
+
+const UPGRADES = {
+  disco: { name: 'Đèn disco', desc: '+15% tiền bo, phòng sáng lung linh', cost: 800 },
+  loa: { name: 'Loa xịn', desc: 'Khách kiên nhẫn thêm 10 giây', cost: 1500 },
+  sofa: { name: 'Sofa da', desc: 'Khách tới đông hơn', cost: 2000 },
+  vip: { name: 'Mở phòng VIP', desc: 'Khách sộp, bo x1.5', cost: 3000 },
+};
+
+const state = { fund: 0, upgrades: {}, customers: {}, players: {} };
+let nextId = 1;
+let spawnTimer = 2;
+
+const rand = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+function pubCustomer(c) {
+  return {
+    id: c.id, type: c.type, roomId: c.roomId, seat: c.seat, mood: Math.round(c.mood),
+    servedBy: c.servedBy, servedName: c.servedName, request: c.request,
+    patience: Math.max(0, Math.round(c.patience)), maxPatience: c.maxPatience,
+    line: c.line, lineAt: c.lineAt, done: c.done, need: c.need,
+  };
+}
+const broadcastCustomers = () => io.emit('customers', Object.values(state.customers).map(pubCustomer));
+const emitState = () => io.emit('state', { fund: state.fund, upgrades: state.upgrades });
+function say(c, line) { c.line = line; c.lineAt = Date.now(); }
+
+function newRequest(c) {
+  const T = TYPES[c.type];
+  const options = T.reqs.filter((k) => !c.request || k !== c.request.kind);
+  const kind = pick(options.length ? options : T.reqs);
+  const data = {};
+  if (kind === 'song') data.genre = Math.random() < 0.75 ? T.genre : pick(GENRES);
+  c.request = { kind, data };
+  c.maxPatience = (kind === 'fruit' || kind === 'water' ? 45 : 35) + (state.upgrades.loa ? 10 : 0);
+  c.patience = c.maxPatience;
+}
+
+function spawnCustomer() {
+  const free = [];
+  for (const r of ROOMS) {
+    if (r.vip && !state.upgrades.vip) continue;
+    const taken = Object.values(state.customers).filter((c) => c.roomId === r.id).map((c) => c.seat);
+    for (let s = 0; s < r.seats; s++) if (!taken.includes(s)) free.push([r.id, s]);
+  }
+  if (!free.length) return;
+  const [roomId, seat] = pick(free);
+  const keys = ROOMS[roomId].vip ? ['daigia', 'oppa', 'sep'] : Object.keys(TYPES);
+  const type = pick(keys);
+  const c = { id: nextId++, type, roomId, seat, mood: 60, servedBy: null, servedName: null, done: 0, need: rand(3, 5), request: null };
+  say(c, LINES.arrive[type]);
+  newRequest(c);
+  state.customers[c.id] = c;
+}
+
+function removeCustomer(c, happy) {
+  delete state.customers[c.id];
+  io.emit('customerLeft', { id: c.id, happy, type: c.type });
+}
+
+function finishCustomer(c) {
+  const p = state.players[c.servedBy];
+  const T = TYPES[c.type];
+  if (p) {
+    let mult = 1;
+    const st = OUTFIT_STYLE[p.app && p.app.outfit];
+    const liked = T.likes === 'any' ? null : st === T.likes;
+    if (liked === true) mult *= 1.5;
+    if (liked === false) mult *= 0.85;
+    if (ROOMS[c.roomId].vip) mult *= 1.5;
+    if (state.upgrades.disco) mult *= 1.15;
+    const tip = Math.max(10, Math.round((T.tip * (0.4 + c.mood / 100) * mult) / 10) * 10);
+    p.money += tip;
+    state.fund += Math.round(tip * 0.3);
+    io.emit('tip', { pid: p.id, name: p.name, amount: tip, cname: T.name, final: true, liked, ctype: c.type });
+    emitState();
+  }
+  removeCustomer(c, true);
+}
+
+// ---------------- Vòng lặp game ----------------
+setInterval(() => {
+  const nPlayers = Object.keys(state.players).length;
+  if (!nPlayers) {
+    state.customers = {};
+    return;
+  }
+  const totalSeats = ROOMS.filter((r) => !r.vip || state.upgrades.vip).reduce((s, r) => s + r.seats, 0);
+  const maxC = Math.min(1 + nPlayers * 2, totalSeats);
+  spawnTimer -= 1;
+  if (spawnTimer <= 0 && Object.keys(state.customers).length < maxC) {
+    spawnCustomer();
+    spawnTimer = state.upgrades.sofa ? 5 : 9;
+  }
+  for (const c of Object.values(state.customers)) {
+    c.patience -= c.servedBy ? 1 : 0.5;
+    if (c.patience <= 0) {
+      c.mood -= 15;
+      say(c, c.servedBy ? pick(LINES.timeout) : pick(LINES.idle));
+      if (c.mood <= 0) {
+        say(c, 'Lần sau anh qua quán khác!');
+        removeCustomer(c, false);
+        io.emit('feed', `${TYPES[c.type].name} bỏ về vì chờ lâu 😤`);
+      } else newRequest(c);
+    }
+  }
+  broadcastCustomers();
+}, 1000);
+
+setInterval(() => {
+  const out = {};
+  for (const p of Object.values(state.players)) out[p.id] = [p.x, p.z, p.ry, p.anim, p.holding, p.money];
+  io.volatile.emit('players', out);
+}, 100);
+
+function sanitizeApp(a) {
+  if (!a || typeof a !== 'object') return {};
+  try {
+    const s = JSON.stringify(a);
+    if (s.length > 3000) return {};
+    return JSON.parse(s);
+  } catch (e) { return {}; }
+}
+
+// ---------------- Kết nối người chơi ----------------
+io.on('connection', (socket) => {
+  socket.on('join', (msg = {}) => {
+    const name = String(msg.name || 'Bé Xinh').trim().slice(0, 16) || 'Bé Xinh';
+    const p = { id: socket.id, name, app: sanitizeApp(msg.app), x: 0, z: 3, ry: Math.PI, anim: 'idle', holding: null, money: 0 };
+    state.players[socket.id] = p;
+    socket.emit('init', {
+      you: socket.id,
+      players: state.players,
+      customers: Object.values(state.customers).map(pubCustomer),
+      fund: state.fund,
+      upgrades: state.upgrades,
+      upgradeDefs: UPGRADES,
+    });
+    socket.broadcast.emit('playerJoined', p);
+    io.emit('feed', `${name} vừa vào ca 💃`);
+  });
+
+  socket.on('move', (m = {}) => {
+    const p = state.players[socket.id];
+    if (!p) return;
+    p.x = clamp(Number(m.x) || 0, -25, 25);
+    p.z = clamp(Number(m.z) || 0, -25, 25);
+    p.ry = Number(m.ry) || 0;
+    p.anim = String(m.anim || 'idle').slice(0, 10);
+    p.holding = m.holding === 'fruit' || m.holding === 'water' ? m.holding : null;
+  });
+
+  socket.on('appearance', (a) => {
+    const p = state.players[socket.id];
+    if (!p) return;
+    p.app = sanitizeApp(a);
+    socket.broadcast.emit('appearance', { id: socket.id, app: p.app });
+  });
+
+  socket.on('serve', ({ cid } = {}) => {
+    const p = state.players[socket.id];
+    const c = state.customers[cid];
+    if (!p || !c) return;
+    if (c.servedBy && c.servedBy !== socket.id) return;
+    c.servedBy = socket.id;
+    c.servedName = p.name;
+    broadcastCustomers();
+  });
+
+  socket.on('release', ({ cid } = {}) => {
+    const c = state.customers[cid];
+    if (c && c.servedBy === socket.id) { c.servedBy = null; c.servedName = null; broadcastCustomers(); }
+  });
+
+  socket.on('resolve', ({ cid, kind, quality } = {}) => {
+    const p = state.players[socket.id];
+    const c = state.customers[cid];
+    if (!p || !c || c.servedBy !== socket.id || !c.request || c.request.kind !== kind) return;
+    const q = clamp(Number(quality) || 0, 0, 1);
+    c.mood = clamp(c.mood + Math.round(q * 30 - (1 - q) * 15), 0, 100);
+    say(c, q >= 0.5 ? pick(LINES.good) : pick(LINES.bad));
+    const T = TYPES[c.type];
+    if (q >= 0.85) {
+      const hot = Math.max(10, Math.round((T.tip * 0.1) / 10) * 10);
+      p.money += hot;
+      state.fund += Math.round(hot * 0.3);
+      io.emit('tip', { pid: p.id, name: p.name, amount: hot, cname: T.name, final: false, ctype: c.type });
+      emitState();
+    }
+    c.done += 1;
+    if (c.mood <= 0) {
+      say(c, 'Thôi anh về!');
+      removeCustomer(c, false);
+      io.emit('feed', `${T.name} giận dỗi bỏ về 😤`);
+    } else if (c.done >= c.need) {
+      finishCustomer(c);
+    } else {
+      newRequest(c);
+    }
+    broadcastCustomers();
+  });
+
+  socket.on('buy', ({ key } = {}) => {
+    const p = state.players[socket.id];
+    const u = UPGRADES[key];
+    if (!p || !u || state.upgrades[key] || state.fund < u.cost) return;
+    state.fund -= u.cost;
+    state.upgrades[key] = true;
+    emitState();
+    io.emit('feed', `${p.name} đã mua "${u.name}" cho quán 🎉`);
+  });
+
+  socket.on('chat', (text) => {
+    const p = state.players[socket.id];
+    const t = String(text || '').trim().slice(0, 80);
+    if (!p || !t) return;
+    io.emit('chat', { id: socket.id, name: p.name, text: t });
+  });
+
+  socket.on('disconnect', () => {
+    const p = state.players[socket.id];
+    if (!p) return;
+    for (const c of Object.values(state.customers)) {
+      if (c.servedBy === socket.id) { c.servedBy = null; c.servedName = null; }
+    }
+    delete state.players[socket.id];
+    io.emit('playerLeft', { id: socket.id });
+    io.emit('feed', `${p.name} đã tan ca 👋`);
+  });
+});
+
+server.listen(PORT, () => console.log(`KTV Lung Linh 3D đang chạy ở cổng ${PORT}`));

@@ -1,0 +1,18 @@
+{
+  "name": "ktv-lung-linh-3d",
+  "version": "1.0.0",
+  "description": "Game 3D online: hóa thân thành bé xinh phục vụ khách quán karaoke, nhận tiền bo",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@pixiv/three-vrm": "^3.5.5",
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "three": "0.160.0"
+  }
+}

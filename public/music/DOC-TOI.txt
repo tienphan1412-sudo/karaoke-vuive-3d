@@ -1,0 +1,10 @@
+BỎ FILE NHẠC MP3 VÀO THƯ MỤC NÀY, ĐẶT ĐÚNG TÊN:
+
+  sanh.mp3       -> nhạc ở sảnh (gợi ý: remix, EDM sôi động)
+  phong101.mp3   -> Phòng 101 (gợi ý: nhạc chậm, guitar, kiểu bolero/acoustic)
+  phong102.mp3   -> Phòng 102 (gợi ý: K-pop, pop dance)
+  phong103.mp3   -> Phòng 103 (gợi ý: lofi, chill)
+  vip.mp3        -> Phòng VIP (gợi ý: EDM, house, sang chảnh)
+
+Thiếu file nào thì khu vực đó tự phát nhạc do game tự tạo.
+Chỉ dùng nhạc miễn phí bản quyền (Pixabay Music, YouTube Audio Library...). Xem README.md.

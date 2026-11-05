@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>KTV Lung Linh 3D</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/", "@pixiv/three-vrm": "/vendor/three-vrm/three-vrm.module.js" } }</script>
+</head>
+<body>
+  <div id="game"></div>
+
+  <!-- Màn hình bắt đầu -->
+  <div id="start" class="screen show">
+    <div class="start-card">
+      <div class="logo">KTV <span>LUNG LINH</span> 3D</div>
+      <p class="tag">Hóa thân thành bé xinh của quán, chiều khách hết mình, gom tiền bo nâng cấp quán!</p>
+      <input id="nameInput" maxlength="16" placeholder="Tên của bạn trong quán" />
+      <button id="btnCreate" class="btn primary">Tạo nhân vật ✨</button>
+      <div id="loadMsg" class="howto" style="text-align:center">Đang tải nhân vật 3D...</div>
+      <div class="howto">
+        <b>Cách chơi:</b> Đi bằng <kbd>W A S D</kbd> / joystick · Kéo chuột để xoay camera · Lại gần khách nhấn <kbd>E</kbd> để phục vụ ·
+        Khách gọi trái cây/nước chanh thì ra <b>Quầy bar</b> lấy · Mặc đúng gu khách được bo gấp rưỡi!
+      </div>
+    </div>
+  </div>
+
+  <!-- Tủ đồ & makeup -->
+  <div id="creator" class="panel">
+    <div class="cr-head">
+      <div class="cr-title">💄 Tủ đồ & Makeup</div>
+      <div class="cr-view">
+        <button data-view="full" class="on">Toàn thân</button>
+        <button data-view="face">Cận mặt</button>
+        <button id="btnRandom">🎲</button>
+      </div>
+    </div>
+    <div class="cr-tabs"></div>
+    <div class="cr-body"></div>
+    <div class="cr-foot">
+      <div id="styleBadge" class="badge"></div>
+      <button id="btnDone" class="btn primary">Vào ca làm 💃</button>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div class="hud-top">
+      <div class="money"><small>Tiền bo của bạn</small><b id="myMoney">0k</b></div>
+      <div class="money fund"><small>Quỹ quán</small><b id="fund">0k</b></div>
+      <div id="myStyle" class="badge"></div>
+    </div>
+    <div class="hud-btns">
+      <button id="btnWardrobe" class="btn">💄 Tủ đồ</button>
+      <button id="btnShop" class="btn">🛠 Nâng cấp quán</button>
+      <button id="btnMusic" class="btn" title="Bật/tắt nhạc">🔊</button>
+      <button id="btnHelp" class="btn">❓</button>
+    </div>
+    <div id="board" class="board"></div>
+    <div id="feed" class="feed"></div>
+    <div id="prompt" class="prompt hidden"></div>
+    <div id="holding" class="holding hidden"></div>
+    <div class="chatbox">
+      <div id="chatlog"></div>
+      <input id="chatInput" maxlength="80" placeholder="Nhấn Enter để chat..." />
+    </div>
+    <div class="emotes">
+      <button data-emote="wave">👋</button>
+      <button data-emote="dance">💃</button>
+      <button data-emote="sing">🎤</button>
+    </div>
+    <div id="joy" class="joy"><div class="knob"></div></div>
+    <button id="actBtn" class="actbtn">E</button>
+  </div>
+
+  <div id="shop" class="modal"><div class="modal-card"><div class="modal-title">🛠 Nâng cấp quán <small>(dùng quỹ chung, 30% tiền bo của mọi người)</small></div><div id="shopList"></div><button class="btn close">Đóng</button></div></div>
+  <div id="barMenu" class="modal"><div class="modal-card"><div class="modal-title">🍹 Quầy bar</div>
+    <div class="bar-opts"><button class="btn" data-item="fruit">🍉 Đĩa trái cây</button><button class="btn" data-item="water">🍋 Ly nước chanh</button><button class="btn" data-item="none">🙌 Bỏ đồ đang cầm</button></div>
+    <button class="btn close">Đóng</button></div></div>
+  <div id="help" class="modal"><div class="modal-card"><div class="modal-title">❓ Cách chơi</div>
+    <ul class="help">
+      <li>Khách vào các phòng 101-103 (mở khóa thêm phòng VIP). Lại gần khách và nhấn <kbd>E</kbd> (hoặc nút tròn trên điện thoại) để nhận khách.</li>
+      <li>Mỗi yêu cầu là một mini-game: chọn bài, rót bia, cụng ly, song ca, nhảy, nói chuyện. Trái cây và nước chanh thì ra Quầy bar lấy rồi mang tới.</li>
+      <li>Làm tốt thì khách vui và bo nóng. Phục vụ xong 3-5 yêu cầu thì khách bo lớn rồi về.</li>
+      <li>Mỗi khách có gu riêng: <b>Đại Gia</b> mê lộng lẫy, <b>Chú Bolero</b> và <b>Oppa</b> mê ngoan hiền, <b>Sếp Nhậu</b> và <b>Gen Z</b> mê gợi cảm. Mặc đúng gu được bo x1.5.</li>
+      <li>30% tiền bo vào quỹ quán, ai cũng mua nâng cấp được. Nhấn <kbd>Q</kbd> để nhường khách cho bạn khác.</li>
+    </ul><button class="btn close">Đã hiểu</button></div></div>
+
+  <div id="mg"></div>
+  <div id="toast"></div>
+  <div id="floaters"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
