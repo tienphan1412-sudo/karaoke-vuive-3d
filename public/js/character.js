@@ -409,7 +409,7 @@ export function createGirl(app) {
   // ---------------- hoạt ảnh ----------------
   function setExpr(e) { if (e === curExpr) return; curExpr = e; if (current) { drawFace(faceCtx, current, e); faceTex.needsUpdate = true; } }
   function animate(anim, t, moveAmt, holding) {
-    setExpr(anim === 'dance' || anim === 'wave' || anim === 'pole' ? 'smile' : anim === 'sing' ? (Math.sin(t * 9) > -0.3 ? 'sing' : 'smile') : 'none');
+    setExpr(anim === 'dance' || anim === 'wave' || anim === 'pole' || anim === 'qchange' ? 'smile' : anim === 'sing' ? (Math.sin(t * 9) > -0.3 ? 'sing' : 'smile') : 'none');
     const swingAmp = longSkirt ? 0.22 : 0.5;
     const phase = t * 9;
     for (const s of [-1, 1]) {
@@ -507,6 +507,14 @@ export function createGirl(app) {
         legs[-1].hip.rotation.set(-1.0, 0, -0.25); legs[-1].knee.rotation.x = 0.9 + Math.sin(t * 2) * 0.2;
         headPivot.rotation.x = -0.4; headPivot.rotation.z = Math.sin(t * 1.5) * 0.15;
       }
+    } else if (anim === 'qchange') {
+      // xoay tít, bay lên, tay giơ cao
+      const k = (t * 1000 % 1600) / 1600;
+      body.rotation.y = t * 22;
+      body.position.y = Math.sin(Math.min(1, k * 1.25) * Math.PI) * 0.35;
+      for (const s of [-1, 1]) { arms[s].sh.rotation.set(0, 0, s * 2.9); legs[s].hip.rotation.z = s * 0.08; }
+      legs[-1].knee.rotation.x = 0.5;
+      headPivot.rotation.x = -0.25;
     } else if (anim === 'stun') {
       body.rotation.x = -1.48; body.position.y = 0.12;
       arms[1].sh.rotation.set(0, 0, 1.4 + Math.sin(t * 12) * 0.15); arms[-1].sh.rotation.set(0, 0, -1.4 - Math.sin(t * 12) * 0.15);

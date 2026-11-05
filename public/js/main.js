@@ -77,6 +77,18 @@ function updateCamera(dt) {
       if (!isMobile) { target.addScaledVector(new THREE.Vector3(rx, 0, rz), 0.55); pos.addScaledVector(new THREE.Vector3(rx, 0, rz), 0.55); }
       else { target.y -= 0.7; pos.y -= 0.1; }
     }
+  } else if (ghenCamOn()) {
+    // nhìn ngang hông cặp vợ chồng, đứng phía không có mình để mình không che
+    const w = ghenFx.npc.group.position;
+    const ce = customers.get(ghenFx.ev.cid);
+    const hu = ce ? ce.obj.group.position : w;
+    const mx = (w.x + hu.x) / 2, mz = (w.z + hu.z) / 2;
+    let ax = hu.x - w.x, az = hu.z - w.z, L = Math.hypot(ax, az);
+    if (L < 0.2) { ax = 1; az = 0; L = 1; }
+    let px = -az / L, pz = ax / L;
+    if (px * (me.x - mx) + pz * (me.z - mz) > 0) { px = -px; pz = -pz; }
+    target = new THREE.Vector3(mx, 1.0, mz);
+    pos = new THREE.Vector3(mx + px * 3.4, 2.3, mz + pz * 3.4);
   } else {
     target = new THREE.Vector3(me.x, 1.2, me.z);
     pos = new THREE.Vector3(
@@ -84,6 +96,8 @@ function updateCamera(dt) {
       1.2 + Math.sin(camPitch) * camDist,
       me.z + Math.cos(camYaw) * Math.cos(camPitch) * camDist
     );
+  }
+  if (camMode !== 'creator') {
     // không cho camera chui vào tường
     const N = 30;
     for (let i = 1; i <= N; i++) {
@@ -121,6 +135,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Digit1') emote('wave');
   if (e.code === 'Digit2') emote('dance');
   if (e.code === 'Digit3') emote('sing');
+  if (e.code === 'Digit4') quickChange();
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
@@ -200,6 +215,7 @@ function updateMe(dt, t) {
   let anim = moving ? 'walk' : 'idle';
   if (me.emoteUntil > t) anim = me.emote;
   if (stunned) anim = 'stun';
+  if (me.qchangeUntil > t) anim = 'qchange';
   me.anim = anim;
   me.char.group.position.set(me.x, 0, me.z);
   me.char.group.rotation.y = me.ry;
@@ -919,6 +935,8 @@ function setStars(id, on, x, z) {
 
 // ---------- Vợ đánh ghen ----------
 let ghenFx = null; // {ev, npc}
+let ghenCamUntil = 0;
+const ghenCamOn = () => ghenFx && serverNow() < ghenCamUntil && camMode === 'play';
 const flying = [];
 function startGhenFx(ev) {
   if (ghenFx) scene.remove(ghenFx.npc.group);
@@ -936,6 +954,8 @@ socket.on('ghenEnd', endGhenFx);
 socket.on('ghenChoice', ({ eid, deadline }) => {
   if (isMinigameOpen()) return;
   ghenChoiceEid = eid;
+  ghenCamUntil = deadline + 2500;
+  { const f = document.createElement('div'); f.className = 'ghen-flash'; document.body.appendChild(f); setTimeout(() => f.remove(), 1600); }
   closeModals();
   $('#ghenModal').classList.add('show'); me.busy = true;
   const total = deadline - serverNow();
@@ -951,6 +971,7 @@ socket.on('ghenChoice', ({ eid, deadline }) => {
     const choice = b.dataset.ghen;
     socket.emit('ghenAnswer', { eid, choice });
     if (choice === 'run') {
+      ghenCamUntil = 0; // trả camera về mình để thấy đường chạy
       const room = ghenFx ? 'r' + ghenFx.ev.roomId : null;
       let n = 3; $('#runBanner').classList.remove('hidden'); $('#runBanner').textContent = `🏃‍♀️ CHẠY RA KHỎI PHÒNG! ${n}`;
       const iv = setInterval(() => {
@@ -1268,6 +1289,59 @@ function clickTo(cx, cy) {
   startGoto(p.x, p.z, null);
 }
 
+
+// =====================================================================
+// ✨ THAY ĐỒ CHỚP NHOÁNG: xoay vòng, tung kim tuyến, hiện ra đồ mới
+// =====================================================================
+const glitter = [];
+const GLITTER_COLS = ['#ffd54f', '#ff4fa3', '#40c4ff', '#ffffff', '#b388ff', '#69f0ae'];
+const glitterGeo = new THREE.PlaneGeometry(0.06, 0.06);
+function glitterAt(x, z, n = 70) {
+  for (let i = 0; i < n; i++) {
+    const m = new THREE.Mesh(glitterGeo, new THREE.MeshBasicMaterial({ color: GLITTER_COLS[i % GLITTER_COLS.length], side: THREE.DoubleSide, transparent: true, depthWrite: false }));
+    const a = Math.random() * Math.PI * 2, r = Math.random() * 0.35;
+    m.position.set(x + Math.cos(a) * r, 0.2 + Math.random() * 1.6, z + Math.sin(a) * r);
+    scene.add(m);
+    const sp = 1.2 + Math.random() * 2.2;
+    glitter.push({ m, v: new THREE.Vector3(Math.cos(a) * sp, 1.5 + Math.random() * 3, Math.sin(a) * sp), spin: new THREE.Vector3(Math.random() * 10, Math.random() * 10, 0), life: 1.6 + Math.random() * 0.8, max: 2.4 });
+  }
+}
+function updateGlitter(dt) {
+  for (let i = glitter.length - 1; i >= 0; i--) {
+    const g = glitter[i]; g.life -= dt;
+    g.v.y -= 2.2 * dt; g.v.multiplyScalar(1 - dt * 1.2);
+    g.m.position.addScaledVector(g.v, dt);
+    g.m.rotation.x += g.spin.x * dt; g.m.rotation.y += g.spin.y * dt;
+    g.m.material.opacity = Math.max(0, Math.min(1, g.life / 0.8)) * (0.6 + 0.4 * Math.sin(g.life * 30));
+    if (g.life <= 0 || g.m.position.y < 0) { scene.remove(g.m); g.m.material.dispose(); glitter.splice(i, 1); }
+  }
+}
+let quickBusy = false;
+function quickChange() {
+  if (!joined || quickBusy || camMode !== 'play' || isMinigameOpen() || me.stunUntil > clock.elapsedTime) return;
+  // chọn bộ đồ khác trong số đồ đã sở hữu, đổi màu ngẫu nhiên
+  const outfits = D.OUTFITS.map((o) => o.id).filter((id) => !lockOf('outfit', id));
+  const others = outfits.filter((id) => id !== app.outfit);
+  const col = D.OUTFIT_COLORS.filter((c) => c !== app.outfitColor);
+  const next = { outfit: others.length ? others[Math.floor(Math.random() * others.length)] : app.outfit, outfitColor: col[Math.floor(Math.random() * col.length)] };
+  quickBusy = true;
+  const wasPole = me.emote === 'pole' && me.emoteUntil > clock.elapsedTime;
+  me.qchangeUntil = clock.elapsedTime + 1.6;
+  cancelGoto();
+  sfx('level');
+  glitterAt(me.x, me.z, 40);
+  setTimeout(() => {
+    setApp(next);
+    glitterAt(me.x, me.z, 90);
+    sfx('tip');
+    const o = D.OUTFITS.find((x) => x.id === next.outfit);
+    floater(`✨ TA-DA! ✨<small>${o ? o.name : ''}</small>`);
+  }, 800);
+  setTimeout(() => { quickBusy = false; if (wasPole) { me.emote = 'pole'; me.emoteUntil = 1e9; } }, 1700);
+  if (others.length === 0 && FEAT.shop) setTimeout(() => toast('Mua thêm đồ ở 🛍 Shop để thay được nhiều kiểu hơn nha!'), 1800);
+}
+$('#btnQuick').addEventListener('click', quickChange);
+
 // ================= Main loop =================
 const clock = new THREE.Clock();
 function loop() {
@@ -1285,6 +1359,8 @@ function loop() {
     p.char.animate(p.anim === 'walk' && !moving ? 'idle' : p.anim, t, moving || (p.anim === 'walk' ? 1 : 0), !!p.holding);
     p.char.setHolding(p.holding);
     setStars(p.id, p.anim === 'stun', p.x, p.z);
+    if (p.anim === 'qchange' && p.lastAnim !== 'qchange') glitterAt(p.x, p.z);
+    p.lastAnim = p.anim;
     p.label.sprite.position.set(p.x, ((p.char.topY || 1.6) + 0.2) * ((p.app && p.app.height) || 1), p.z);
   }
   for (const e of customers.values()) {
@@ -1300,6 +1376,7 @@ function loop() {
     b.sprite.position.set(src.x, 2.3, src.z);
   }
   updateFx(dt, t);
+  updateGlitter(dt);
   if (marker.visible) { const s = 1 + Math.sin(t * 8) * 0.12; marker.scale.set(s, s, s); }
   myLabel.sprite.visible = camMode === 'play';
   world.update(t, gameState.upgrades);
@@ -1315,4 +1392,4 @@ loop();
 refreshStyleBadges();
 
 // cho phép chạy thử tự động
-window.__ktv = { clickTo, get goto() { return goto; }, runMinigame, me, customers, players, socket, interact, setApp, openCreator, closeCreator, openStore, get app() { return app; }, get owned() { return owned; }, get myMoney() { return myMoney; }, scene, camera, renderer };
+window.__ktv = { quickChange, clickTo, get goto() { return goto; }, runMinigame, me, customers, players, socket, interact, setApp, openCreator, closeCreator, openStore, get app() { return app; }, get owned() { return owned; }, get myMoney() { return myMoney; }, scene, camera, renderer };
