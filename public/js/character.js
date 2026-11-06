@@ -26,6 +26,12 @@ export function shade(h, amt) {
 const FW = 512, FH = 400;
 function drawFace(ctx, a, expr = 'none') {
   ctx.clearRect(0, 0, FW, FH);
+  const han = a.face === 'han';
+  if (han) drawHanUpper(ctx, a);
+  else drawClassicUpper(ctx, a);
+  drawMouth(ctx, a, expr, han);
+}
+function drawClassicUpper(ctx, a) {
   // má hồng
   if (a.blush && a.blush !== 'none') {
     for (const s of [-1, 1]) {
@@ -109,6 +115,8 @@ function drawFace(ctx, a, expr = 'none') {
   // mũi
   ctx.strokeStyle = 'rgba(160,95,85,0.6)'; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.moveTo(254, 262); ctx.quadraticCurveTo(262, 274, 252, 278); ctx.stroke();
+}
+function drawMouth(ctx, a, expr, han) {
   // môi
   const ly = 326;
   if (expr === 'smile' || expr === 'sing') {
@@ -129,6 +137,7 @@ function drawFace(ctx, a, expr = 'none') {
     ctx.restore();
     return;
   }
+  if (han) { drawHanLips(ctx, a, ly); return; }
   ctx.fillStyle = a.lip;
   ctx.beginPath();
   ctx.moveTo(226, ly);
@@ -144,6 +153,145 @@ function drawFace(ctx, a, expr = 'none') {
   if (a.gloss) {
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
     ctx.beginPath(); ctx.ellipse(262, ly + 11, 9, 3.5, -0.1, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+
+// ---------- mặt phong cách Hàn: mắt to long lanh, má hồng loang dưới mắt, môi tint ----------
+function drawHanUpper(ctx, a) {
+  const blush = a.blush && a.blush !== 'none' ? a.blush : '#ff9e9e';
+  // má hồng loang rộng, cao sát dưới mắt + vệt hồng nhẹ qua sống mũi
+  for (const s of [-1, 1]) {
+    const x = 256 + s * 110, y = 256;
+    const gr = ctx.createRadialGradient(x, y, 0, x, y, 96);
+    gr.addColorStop(0, hexA(blush, 0.75)); gr.addColorStop(0.55, hexA(blush, 0.38)); gr.addColorStop(1, hexA(blush, 0));
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.ellipse(x, y, 96, 58, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  { const gr = ctx.createRadialGradient(256, 250, 0, 256, 250, 50);
+    gr.addColorStop(0, hexA(blush, 0.22)); gr.addColorStop(1, hexA(blush, 0));
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.ellipse(256, 250, 50, 20, 0, 0, Math.PI * 2); ctx.fill(); }
+  const browC = shade(a.hairColor || '#222', a.hairColor && parseInt(a.hairColor.slice(1), 16) > 0x999999 ? -0.4 : 0.12);
+  for (const s of [-1, 1]) {
+    const cx = 256 + s * 100, cy = 200;
+    const IN = [cx - s * 54, cy + 8], OUT = [cx + s * 58, cy + 2];
+    const UP = [cx - s * 4, cy - 94], LO = [cx + s * 4, cy + 74];
+    const eyePath = () => { ctx.beginPath(); ctx.moveTo(...IN); ctx.quadraticCurveTo(...UP, ...OUT); ctx.quadraticCurveTo(...LO, ...IN); ctx.closePath(); };
+    // phấn mắt: mặc định hồng đào ở cả mí trên và mí dưới (kiểu mắt "khóc")
+    const sh = a.shadow && a.shadow !== 'none' ? a.shadow : '#e8908f';
+    const amt = a.shadow && a.shadow !== 'none' ? (a.shadowAmt ?? 0.6) : 0.45;
+    { const gr = ctx.createRadialGradient(cx + s * 10, cy - 14, 8, cx + s * 10, cy - 14, 70);
+      gr.addColorStop(0, hexA(sh, 0.75 * amt)); gr.addColorStop(1, hexA(sh, 0));
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.ellipse(cx + s * 8, cy - 16, 72, 46, 0, 0, Math.PI * 2); ctx.fill();
+      const g2 = ctx.createRadialGradient(cx + s * 12, cy + 44, 4, cx + s * 12, cy + 44, 52);
+      g2.addColorStop(0, hexA(sh, 0.6 * amt)); g2.addColorStop(1, hexA(sh, 0));
+      ctx.fillStyle = g2; ctx.beginPath(); ctx.ellipse(cx + s * 12, cy + 46, 56, 20, 0, 0, Math.PI * 2); ctx.fill(); }
+    // bọng mắt (aegyo-sal): vệt sáng + bóng mờ bên dưới
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.moveTo(cx - s * 36, cy + 50); ctx.quadraticCurveTo(cx + s * 6, cy + 72, cx + s * 48, cy + 42); ctx.stroke();
+    ctx.strokeStyle = 'rgba(190,110,110,0.28)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(cx - s * 32, cy + 62); ctx.quadraticCurveTo(cx + s * 6, cy + 82, cx + s * 46, cy + 54); ctx.stroke();
+    // tròng trắng
+    eyePath(); ctx.fillStyle = '#fbf7f6'; ctx.fill();
+    // mống mắt to, tối, long lanh
+    ctx.save(); eyePath(); ctx.clip();
+    const ix = cx - s * 3, iy = cy + 2;
+    const ig = ctx.createLinearGradient(ix, iy - 40, ix, iy + 40);
+    ig.addColorStop(0, shade(a.eyeColor, -0.8)); ig.addColorStop(0.6, shade(a.eyeColor, -0.4)); ig.addColorStop(1, shade(a.eyeColor, 0.1));
+    ctx.fillStyle = ig; ctx.beginPath(); ctx.arc(ix, iy, 43, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = shade(a.eyeColor, -0.85); ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = '#120b0b'; ctx.beginPath(); ctx.arc(ix, iy + 2, 19, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(cx, cy - 30, 60, 22, 0, 0, Math.PI * 2); ctx.fill(); // bóng mí trên đổ xuống
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.ellipse(ix - 14, iy - 14, 12, 9, -0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(ix + 14, iy + 15, 4.5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(ix, iy, 30, 0.35 * Math.PI, 0.65 * Math.PI); ctx.stroke();
+    ctx.restore();
+    // nếp mí đôi
+    ctx.strokeStyle = 'rgba(150,85,85,0.45)'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(cx - s * 38, cy - 36); ctx.quadraticCurveTo(cx + s * 2, cy - 90, cx + s * 56, cy - 18); ctx.stroke();
+    // viền mí trên dày dần ra đuôi; đuôi cụp xuống (mắt cún) hoặc vểnh lên nếu chọn mắt mèo
+    const lw = { none: 6, thin: 8, cat: 9, bold: 12 }[a.liner] || 8;
+    ctx.strokeStyle = '#1a1111';
+    for (let i = 0; i < 3; i++) {
+      ctx.lineWidth = lw - i * 2.2;
+      const t0 = 0.15 + i * 0.25;
+      ctx.beginPath();
+      for (let k = 0; k <= 20; k++) {
+        const t = t0 + (1 - t0) * (k / 20);
+        const x = (1 - t) ** 2 * IN[0] + 2 * (1 - t) * t * UP[0] + t * t * OUT[0];
+        const y = (1 - t) ** 2 * IN[1] + 2 * (1 - t) * t * UP[1] + t * t * OUT[1];
+        k ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+    }
+    ctx.lineWidth = lw - 2;
+    ctx.beginPath(); ctx.moveTo(...OUT);
+    if (a.liner === 'cat' || a.liner === 'bold') ctx.lineTo(cx + s * 80, cy - 20); else ctx.lineTo(cx + s * 68, cy + 12);
+    ctx.stroke();
+    // mi trên: nhiều sợi mảnh
+    const n = { natural: 7, doll: 10, drama: 13 }[a.lashes] || 9;
+    const L = { natural: 10, doll: 14, drama: 19 }[a.lashes] || 13;
+    ctx.lineWidth = 2.2;
+    for (let i = 0; i < n; i++) {
+      const t = 0.35 + 0.65 * (i / Math.max(1, n - 1));
+      const x = (1 - t) ** 2 * IN[0] + 2 * (1 - t) * t * UP[0] + t * t * OUT[0];
+      const y = (1 - t) ** 2 * IN[1] + 2 * (1 - t) * t * UP[1] + t * t * OUT[1];
+      const dx = s * (0.3 + 0.9 * t), dy = -1, len = Math.hypot(dx, dy);
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + (dx / len) * L * 0.5, y + (dy / len) * L * 0.8, x + (dx / len) * L, y + (dy / len) * L * 0.6); ctx.stroke();
+    }
+    // mi dưới: viền nhạt + vài cụm mi rõ ở đuôi
+    ctx.strokeStyle = 'rgba(80,45,45,0.55)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cx - s * 40, cy + 26); ctx.quadraticCurveTo(...LO, OUT[0] - s * 4, OUT[1] + 6); ctx.stroke();
+    ctx.strokeStyle = 'rgba(40,20,20,0.75)'; ctx.lineWidth = 1.8;
+    for (let i = 0; i < 5; i++) {
+      const x = cx + s * (-4 + i * 12), y = cy + 42 - i * 4;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + s * (2 + i), y + 9 + (i % 2) * 3); ctx.stroke();
+    }
+    // chân mày ngang, mềm, nhạt
+    ctx.save(); ctx.globalAlpha = 0.75; ctx.strokeStyle = browC; ctx.lineCap = 'round';
+    const by = cy - 92;
+    const bw = { thin: 5, natural: 9, straight: 10, arched: 8 }[a.brows] || 9;
+    ctx.lineWidth = bw;
+    ctx.beginPath();
+    if (a.brows === 'arched') { ctx.moveTo(cx - s * 40, by + 8); ctx.quadraticCurveTo(cx + s * 14, by - 18, cx + s * 52, by + 8); }
+    else { ctx.moveTo(cx - s * 40, by + 4); ctx.quadraticCurveTo(cx + s * 4, by - 8, cx + s * 50, by + 6); }
+    ctx.stroke();
+    ctx.globalAlpha = 0.35; ctx.lineWidth = bw + 4;
+    ctx.beginPath(); ctx.moveTo(cx - s * 40, by + 5); ctx.lineTo(cx - s * 22, by + 2); ctx.stroke();
+    ctx.restore();
+  }
+  // mũi nhỏ: bóng mờ dưới chóp + điểm sáng sống mũi
+  ctx.fillStyle = 'rgba(200,120,110,0.35)'; ctx.beginPath(); ctx.ellipse(256, 280, 13, 4, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(170,95,90,0.55)'; ctx.lineWidth = 2.2;
+  ctx.beginPath(); ctx.moveTo(246, 276); ctx.quadraticCurveTo(250, 282, 256, 280); ctx.quadraticCurveTo(262, 282, 266, 276); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.beginPath(); ctx.ellipse(257, 262, 3.5, 6, 0, 0, Math.PI * 2); ctx.fill();
+}
+function drawHanLips(ctx, a, ly) {
+  // môi nhỏ, đầy, son tint: đậm ở giữa, nhạt dần ra viền
+  const shape = () => {
+    ctx.beginPath();
+    ctx.moveTo(228, ly);
+    ctx.quadraticCurveTo(240, ly - 13, 250, ly - 10);
+    ctx.quadraticCurveTo(256, ly - 6, 262, ly - 10);
+    ctx.quadraticCurveTo(272, ly - 13, 284, ly);
+    ctx.quadraticCurveTo(272, ly + 26, 256, ly + 26);
+    ctx.quadraticCurveTo(240, ly + 26, 228, ly);
+    ctx.closePath();
+  };
+  shape(); ctx.fillStyle = hexA(a.lip, 0.35); ctx.fill();
+  ctx.save(); shape(); ctx.clip();
+  const gr = ctx.createRadialGradient(256, ly + 3, 2, 256, ly + 3, 34);
+  gr.addColorStop(0, shade(a.lip, -0.25)); gr.addColorStop(0.5, hexA(a.lip, 0.9)); gr.addColorStop(1, hexA(a.lip, 0.15));
+  ctx.fillStyle = gr; ctx.fillRect(210, ly - 20, 92, 52);
+  ctx.restore();
+  ctx.strokeStyle = shade(a.lip, -0.55); ctx.lineWidth = 2; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(232, ly + 1); ctx.quadraticCurveTo(244, ly + 4, 256, ly + 2); ctx.quadraticCurveTo(268, ly + 4, 280, ly + 1); ctx.stroke();
+  if (a.gloss) {
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.beginPath(); ctx.ellipse(262, ly + 14, 8, 3, -0.1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(246, ly - 6, 4, 1.8, 0.3, 0, Math.PI * 2); ctx.fill();
   }
 }
 
@@ -265,9 +413,23 @@ export function createGirl(app) {
     const backR = style === 'bob' ? 0.142 : 0.136;
     add(new THREE.Mesh(new THREE.SphereGeometry(backR, 32, 20, Math.PI / 2 + 0.72, Math.PI * 2 - 1.44, 0, backTheta), hm));
     // mái
-    const bangs = add(new THREE.Mesh(new THREE.SphereGeometry(0.136, 28, 10, Math.PI / 2 - 0.86, 1.72, 0, 1.2), hm));
-    bangs.rotation.y = 0;
-    if (style === 'long' || style === 'wave') {
+    if (style === 'midpart') {
+      // rẽ ngôi giữa: hai mảng mái hất sang hai bên, chừa đường ngôi
+      for (const s of [-1, 1]) {
+        const half = add(new THREE.Mesh(new THREE.SphereGeometry(0.137, 16, 10, s > 0 ? Math.PI / 2 - 0.93 : Math.PI / 2 + 0.03, 0.9, 0, 1.12), hm));
+        half.rotation.z = -s * 0.04;
+      }
+      // tóc ôm hai bên má (mảng dẹt áp sát mặt)
+      for (const s of [-1, 1]) {
+        const f = add(sph(0.05, hm, 16, 12)); f.scale.set(0.42, 2.0, 0.8); f.position.set(s * 0.104, -0.045, 0.045); f.rotation.z = s * 0.1;
+      }
+    } else {
+      add(new THREE.Mesh(new THREE.SphereGeometry(0.136, 28, 10, Math.PI / 2 - 0.86, 1.72, 0, 1.2), hm));
+    }
+    if (style === 'midpart') {
+      const mass = add(sph(0.13, hm)); mass.scale.set(1.05, 2.8, 0.55); mass.position.set(0, -0.27, -0.07);
+      for (const s of [-1, 1]) { const st = add(caps(0.028, 0.34, hm)); st.position.set(s * 0.108, -0.24, 0.035); st.rotation.z = s * 0.06; }
+    } else if (style === 'long' || style === 'wave') {
       const mass = add(sph(0.13, hm)); mass.scale.set(1.05, 2.5, 0.55); mass.position.set(0, -0.23, -0.07);
       for (const s of [-1, 1]) {
         const st = add(caps(0.028, 0.28, hm)); st.position.set(s * 0.108, -0.2, 0.035); st.rotation.z = s * 0.06;

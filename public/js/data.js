@@ -19,8 +19,10 @@ export const HAIR_COLORS = ['#1a1110', '#3b2219', '#6b3e26', '#a0522d', '#d8b26e
 export const HAIR_STYLES = [
   { id: 'long', name: 'Xõa dài' }, { id: 'wave', name: 'Xoăn sóng' }, { id: 'pony', name: 'Đuôi ngựa' },
   { id: 'twin', name: 'Hai bím' }, { id: 'bob', name: 'Tóc bob' }, { id: 'bun', name: 'Búi cao' },
+  { id: 'midpart', name: 'Dài rẽ ngôi giữa' },
 ];
-export const EYE_COLORS = ['#3e2723', '#6d4c41', '#1565c0', '#2e7d32', '#6a1b9a', '#c62828', '#546e7a'];
+export const FACE_STYLES = [{ id: 'classic', name: 'Búp bê' }, { id: 'han', name: 'Phong cách Hàn 🇰🇷' }];
+export const EYE_COLORS = ['#2b1d1a', '#3e2723', '#6d4c41', '#1565c0', '#2e7d32', '#6a1b9a', '#c62828', '#546e7a'];
 export const SHADOW_COLORS = ['none', '#f48fb1', '#ce93d8', '#ffcc80', '#a1887f', '#90caf9', '#d4af37', '#ef5350'];
 export const LIP_COLORS = ['#e57373', '#d81b60', '#b71c1c', '#f06292', '#ff8a65', '#8d6e63', '#ad1457', '#ffab91', '#9b0000'];
 export const BLUSH_COLORS = ['none', '#f8a5b8', '#ff8a80', '#ffab91', '#e1bee7'];
@@ -36,7 +38,7 @@ export const BAGS = [{ id: 'none', name: 'Không' }, { id: 'tui', name: 'Túi hi
 export const DEFAULT_APP = {
   skin: SKIN[0], height: 1, outfit: 'bodycon', outfitColor: '#c2185b', shoes: '#212121', bag: 'none',
   hair: 'long', hairColor: '#1a1110',
-  eyeColor: '#6d4c41', shadow: '#f48fb1', shadowAmt: 0.6, liner: 'thin', lashes: 'doll', brows: 'natural',
+  face: 'classic', eyeColor: '#6d4c41', shadow: '#f48fb1', shadowAmt: 0.6, liner: 'thin', lashes: 'doll', brows: 'natural',
   blush: '#f8a5b8', lip: '#d81b60', gloss: true,
   earrings: 'pearl', clip: 'none', glasses: 'none', necklace: 'none',
 };

@@ -584,6 +584,7 @@ const CREATOR = [
     { key: 'hairColor', label: 'Màu tóc', type: 'swatch', options: D.HAIR_COLORS },
   ] },
   { tab: 'Mắt', face: true, items: [
+    { key: 'face', label: 'Kiểu mặt', type: 'opts', options: D.FACE_STYLES },
     { key: 'eyeColor', label: 'Màu lens', type: 'swatch', options: D.EYE_COLORS },
     { key: 'shadow', label: 'Phấn mắt', type: 'swatch', options: D.SHADOW_COLORS },
     { key: 'shadowAmt', label: 'Độ đậm phấn mắt', type: 'range', min: 0.2, max: 1, step: 0.05, fmt: (v) => Math.round(v * 100) + '%' },
@@ -656,7 +657,7 @@ $('#btnRandom').addEventListener('click', () => {
   setApp({
     outfit: pa('outfit', D.OUTFITS, (o) => o.id), outfitColor: p(D.OUTFIT_COLORS), shoes: p(D.SHOE_COLORS), hair: p(D.HAIR_STYLES).id, hairColor: p(D.HAIR_COLORS),
     eyeColor: p(D.EYE_COLORS), shadow: pa('shadow', D.SHADOW_COLORS), liner: p(D.LINER).id, lashes: pa('lashes', D.LASHES, (o) => o.id), brows: p(D.BROWS).id,
-    lip: pa('lip', D.LIP_COLORS), blush: p(D.BLUSH_COLORS), gloss: Math.random() < 0.5, earrings: pa('earrings', D.EARRINGS, (o) => o.id), clip: pa('clip', D.CLIPS, (o) => o.id), necklace: pa('necklace', D.NECKLACES, (o) => o.id),
+    face: p(D.FACE_STYLES).id, lip: pa('lip', D.LIP_COLORS), blush: p(D.BLUSH_COLORS), gloss: Math.random() < 0.5, earrings: pa('earrings', D.EARRINGS, (o) => o.id), clip: pa('clip', D.CLIPS, (o) => o.id), necklace: pa('necklace', D.NECKLACES, (o) => o.id),
   });
   renderCreator();
 });
