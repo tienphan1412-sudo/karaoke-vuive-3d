@@ -724,7 +724,7 @@ io.on('connection', (socket) => {
     const p = me(), c = state.customers[cid];
     if (!p || !c || c.st !== 'flee') return;
     const pos = posAt(c.flee.pts, (now() - c.flee.t0) / 1000 * c.flee.speed);
-    if (Math.hypot(pos.x - p.x, pos.z - p.z) > 2.6) return socket.emit('toast', 'Chưa tới gần, chạy nhanh lên!');
+    if (Math.hypot(pos.x - p.x, pos.z - p.z) > 3.4) return socket.emit('toast', 'Chưa tới gần, chạy nhanh lên!'); // nới rộng vì vị trí trên server trễ hơn màn hình một chút
     earn(p, c.fleeTip);
     stat(p).catch++; progress(p, 'catch'); progress(p, 'serve');
     say(c, 'Thôi thôi anh trả, anh trả mà! 😰');
