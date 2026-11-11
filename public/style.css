@@ -290,3 +290,41 @@ body.clean .cam-tools:hover { opacity: 1; }
   .emotes { bottom: 128px; right: 12px; }
   .actbtn { right: 14px; bottom: 16px; width: 64px; height: 64px; font-size: 20px; }
 }
+
+/* ===== màn thăng cấp (cutscene) ===== */
+.cine { position: fixed; inset: 0; z-index: 45; display: none; pointer-events: none; }
+.cine.show { display: block; pointer-events: auto; }
+.cine .bar { position: absolute; left: 0; right: 0; height: 0; background: #000; transition: height .6s ease; }
+.cine .bar.top { top: 0; } .cine .bar.bot { bottom: 0; }
+.cine.show .bar { height: 11vh; }
+.cine-text { position: absolute; left: 0; right: 0; bottom: 11vh; padding-bottom: 2vh !important; padding-top: 40px !important; background: linear-gradient(transparent, rgba(0,0,0,.65) 35%); text-align: center; opacity: 0; transform: translateY(20px); transition: all .8s ease 1.4s; padding: 0 16px; }
+.cine.show .cine-text { opacity: 1; transform: none; }
+.cine-kicker { font-size: 13px; letter-spacing: 4px; color: #ffe9a8; font-weight: 800; text-shadow: 0 0 10px #000; }
+.cine-decree { font-size: 15px; color: #fff; margin: 6px auto 4px; max-width: 560px; text-shadow: 0 1px 6px #000; font-style: italic; }
+.cine-rank { font-size: clamp(40px, 9vw, 84px); font-weight: 900; line-height: 1.05; background: linear-gradient(180deg, #fff6c9 10%, #ffd54f 45%, #c88a12 90%); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 18px rgba(255,190,60,.7)) drop-shadow(0 3px 0 #5a3500); animation: rankpop 1s ease 1.6s both; }
+@keyframes rankpop { 0% { transform: scale(2.4); opacity: 0; } 60% { transform: scale(.92); opacity: 1; } 100% { transform: scale(1); } }
+.cine-perks { margin-top: 8px; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.cine-perks span { background: rgba(0,0,0,.55); border: 1px solid #ffd54f; color: #ffe9a8; border-radius: 20px; padding: 4px 10px; font-size: 13px; font-weight: 700; }
+.cine-skip { position: absolute; right: 16px; bottom: calc(11vh + 8px); font-size: 11px; color: rgba(255,255,255,.6); }
+body.cutscene #hud, body.cutscene .cam-tools { visibility: hidden; }
+
+/* ===== phòng riêng ===== */
+.home-mine { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.home-mine span { background: rgba(255,255,255,.08); border-radius: 12px; padding: 6px 10px; font-size: 13px; }
+.home-visit { display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow: auto; margin: 6px 0; }
+.home-visit .row { display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,.06); border-radius: 12px; padding: 6px 10px; }
+.home-visit .row .btn { padding: 5px 10px; font-size: 13px; }
+.home-search { display: flex; gap: 6px; margin-bottom: 8px; }
+.home-search input { flex: 1; }
+.home-bar { position: fixed; top: 74px; left: 50%; transform: translateX(-50%); z-index: 12; display: flex; align-items: center; gap: 10px; background: rgba(20,6,30,.82); border: 1px solid #ffd54f; border-radius: 18px; padding: 8px 12px; max-width: calc(100% - 16px); flex-wrap: wrap; justify-content: center; }
+.home-bar.hidden { display: none; }
+.home-info { font-weight: 800; color: #ffe9a8; font-size: 14px; }
+.home-info small { font-weight: 400; color: #fff; opacity: .85; margin-left: 6px; }
+.home-acts { display: flex; gap: 6px; }
+.home-acts .btn { padding: 6px 10px; font-size: 13px; }
+.home-acts .btn.on { background: #ffd54f; color: #3a2400; }
+.decor-card { text-align: left; }
+.decor-card .ic { font-size: 26px; }
+.decor-card .meta { font-size: 12px; opacity: .8; }
+body.in-home .board, body.in-home #shiftTimer { display: none !important; }
+@media (max-width: 800px), (pointer: coarse) { .home-bar { top: 58px; padding: 6px 8px; gap: 6px; } .home-info { font-size: 12px; } }

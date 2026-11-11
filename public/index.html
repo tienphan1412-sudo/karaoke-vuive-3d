@@ -67,6 +67,7 @@
     </div>
     <div class="hud-btns">
       <button id="btnWardrobe" class="btn" title="Tủ đồ">💄<span class="lbl"> Tủ đồ</span></button>
+      <button id="btnHome" class="btn" title="Phòng riêng">🏠<span class="lbl"> Phòng</span></button>
       <button id="btnStore" class="btn" title="Shop">🛍<span class="lbl"> Shop</span></button>
       <button id="btnQuest" class="btn" title="Nhiệm vụ">📋<span class="lbl"> Nhiệm vụ</span></button>
       <button id="btnGift" class="btn" title="Tặng">🎁<span class="lbl"> Tặng</span></button>
@@ -112,6 +113,8 @@
       <li>30% tiền bo vào quỹ quán, ai cũng mua nâng cấp được. Nhấn <kbd>Q</kbd> để nhường khách cho bạn khác.</li>
       <li data-feat="shop">🛍 <b>Shop</b> (quầy hồng cạnh phòng thay đồ, hoặc nút Shop): dùng tiền bo mua đồ. Món có ✨ (đầm VIP, túi hiệu, vương miện, son đỏ) giúp tăng tiền bo.</li>
       <li>📷 <b>Chụp</b> / 🎥 <b>quay video</b> (dọc cho TikTok hoặc ngang) / ⛶ toàn màn hình / 🙈 thu gọn giao diện: các nút bên trái màn hình. Phím tắt: <kbd>P</kbd> chụp, <kbd>V</kbd> quay/dừng, <kbd>H</kbd> thu gọn.</li>
+      <li>🏠 <b>Phòng riêng</b>: bấm nút 🏠 để vào phòng của mình. Bấm "🎨 Trang trí" rồi chạm vào các vòng tròn vàng để mua và đặt đồ (sofa, gương, bể cá, đàn piano...), đổi giấy dán tường và sàn. Bạn bè có thể ghé thăm và thả tim.</li>
+      <li>✨ <b>Nhân vật 3D</b>: vào 💄 Tủ đồ → tab ✨ Nhân vật 3D để đổi sang người thật 3D (hoặc quay lại người khối để tự makeup).</li>
       <li>✨ <b>Thay đồ chớp nhoáng</b>: bấm nút ✨ (phím <kbd>4</kbd>), nhân vật xoay vòng, tung kim tuyến rồi hiện ra trong bộ đồ khác. Dùng được mọi lúc, cả lúc đang múa!</li>
       <li data-feat="levels">👑 <b>Cấp bậc</b>: Tập sự → Nhân viên → Hoa khôi → Má mì. Kiếm càng nhiều tiền bo càng lên cấp; Hoa khôi và Má mì được bo thêm.</li>
       <li data-feat="quests">📋 <b>Nhiệm vụ</b>: mỗi ngày 3 nhiệm vụ mới, làm xong tự nhận thưởng.</li>
@@ -157,6 +160,34 @@
   <div id="recBar" class="rec-bar hidden"><span class="dot"></span><b id="recTime">0:00</b><button id="btnRecStop" class="btn">⏹ Dừng & lưu</button></div>
   <button id="btnUnclean" class="unclean hidden">🙉 Hiện lại nút</button>
   <div id="shotFlash" class="shot-flash"></div>
+  <div id="homeModal" class="modal"><div class="modal-card"><div class="modal-title">🏠 Phòng riêng <small>Mua đồ trang trí bằng tiền bo, rủ bạn bè ghé thăm thả tim</small></div>
+    <div id="homeMine" class="home-mine"></div>
+    <button id="btnGoHome" class="btn primary wide">Vào phòng của tôi ✨</button>
+    <div class="cr-label" style="margin-top:12px">Ghé thăm phòng bạn bè</div>
+    <div id="homeVisitList" class="home-visit"></div>
+    <div class="home-search"><input id="homeName" maxlength="16" placeholder="Hoặc gõ tên nhân vật..." /><button id="btnVisitName" class="btn">Ghé thăm</button></div>
+    <button class="btn close">Đóng</button></div></div>
+  <div id="decorModal" class="modal"><div class="modal-card wide-card"><div id="decorTitle" class="modal-title"></div>
+    <div id="decorTabs" class="auth-tabs"></div>
+    <div id="decorList" class="store-list"></div>
+    <button class="btn close">Xong</button></div></div>
+  <div id="homeBar" class="home-bar hidden">
+    <div id="homeInfo" class="home-info"></div>
+    <div class="home-acts">
+      <button id="btnDecor" class="btn">🎨 Trang trí</button>
+      <button id="btnLike" class="btn">❤️ Thả tim</button>
+      <button id="btnLeaveHome" class="btn primary">🚪 Về quán</button>
+    </div>
+  </div>
+  <div id="cine" class="cine"><div class="bar top"></div><div class="bar bot"></div>
+    <div class="cine-text">
+      <div class="cine-kicker">🎊 QUẢN LÝ QUÁN BAN LỆNH 🎊</div>
+      <div id="cineDecree" class="cine-decree"></div>
+      <div id="cineRank" class="cine-rank"></div>
+      <div id="cinePerks" class="cine-perks"></div>
+    </div>
+    <div class="cine-skip">Chạm để bỏ qua</div>
+  </div>
   <div id="mg"></div>
   <div id="toast"></div>
   <div id="floaters"></div>
