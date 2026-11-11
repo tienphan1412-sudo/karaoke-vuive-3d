@@ -1,4 +1,11 @@
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { buildHome, HOME, HOME_SPAWN, HOME_DOOR, SLOT_NAMES } from './home.js';
+import { createModelGirl, loadManifest, models as girlModels, modelInfo, preload as preloadModel } from './girl3d.js';
 import { createGirl, createCustomer, createNPC, createSlipper, makeLabel, roundRect } from './character.js';
 import { buildWorld, seatTransform, BAR, MIRROR, ROOM_DEFS, POLES, EXIT, BREAKER, SHOPSPOT } from './world.js';
 import { runMinigame, isMinigameOpen, getLastScore, setMgFeatures } from './minigames.js';
@@ -25,7 +32,9 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color('#120818');
 scene.fog = new THREE.Fog('#120818', 28, 60);
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.03, 200);
-const hemi = new THREE.HemisphereLight('#ffd6f0', '#2a1040', 1.6); scene.add(hemi);
+// môi trường phản chiếu để kim loại, đá bóng, nhung trông sang hơn
+{ const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); }
+const hemi = new THREE.HemisphereLight('#ffd6f0', '#2a1040', 1.1); scene.add(hemi);
 const amb = new THREE.AmbientLight('#ffffff', 0.35); scene.add(amb);
 const sun = new THREE.DirectionalLight('#fff0f6', 1.0); sun.position.set(5, 10, 8); scene.add(sun);
 // màn hình dọc (điện thoại): mở rộng góc nhìn + lùi camera xa hơn, nhìn chéo từ trên cao để thấy được như máy tính
@@ -33,6 +42,7 @@ let portrait = false, camMul = 1;
 const playFov = () => (camMode === 'creator' ? 55 : portrait ? 68 : innerWidth / innerHeight < 1.3 ? 60 : 55);
 function fitView() {
   renderer.setSize(innerWidth, innerHeight);
+  if (composer) { composer.setSize(innerWidth, innerHeight); bloom.resolution.set(innerWidth / 2, innerHeight / 2); }
   const asp = innerWidth / innerHeight;
   portrait = asp < 0.9;
   camera.aspect = asp;
@@ -42,8 +52,17 @@ function fitView() {
 }
 addEventListener('resize', fitView);
 
-const world = buildWorld(scene);
+const world = buildWorld(scene, { lite: matchMedia('(max-width: 800px), (pointer: coarse)').matches });
 const isMobile = matchMedia('(max-width: 800px), (pointer: coarse)').matches;
+// hiệu ứng tỏa sáng cho đèn neon (chỉ trên máy tính cho nhẹ điện thoại)
+let composer = null, bloom = null;
+if (!isMobile && !/[?&]nobloom/.test(location.search)) {
+  composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.4, 0.45, 0.93);
+  composer.addPass(bloom);
+  composer.addPass(new OutputPass());
+}
 
 // ================= State =================
 const DEFAULT = { ...D.DEFAULT_APP };
@@ -60,13 +79,17 @@ const serverNow = () => Date.now() + timeOffset;
 const players = new Map();   // id -> remote
 const customers = new Map(); // id -> {data, obj, label, key}
 
-const me = { char: createGirl(app), x: 0, z: 3, ry: Math.PI, anim: 'idle', holding: null, emoteUntil: 0, emote: null, busy: false };
+const makeGirl = (a) => createModelGirl(a, createGirl(a));
+const home = buildHome(scene, world.colliders);
+// danh sách nhân vật 3D (Tripo) — tải xong thì cập nhật lại người đang dùng model
+loadManifest().then(() => { me.char.update(app); for (const p of players.values()) p.char.update({ ...DEFAULT, ...p.app }); if ($('#creator').classList.contains('show')) renderCreator(); });
+const me = { char: makeGirl(app), x: 0, z: 3, ry: Math.PI, anim: 'idle', holding: null, emoteUntil: 0, emote: null, busy: false };
 scene.add(me.char.group);
 const myLabel = makeLabel(512, 96, 1);
 scene.add(myLabel.sprite);
 
 // ================= Camera =================
-let camYaw = 0, camPitch = 0.55, camDist = 4.4;
+let camYaw = 0, camPitch = 0.55, camDist = 4.4, camSnap = false;
 let camMode = 'play'; // play | creator
 fitView();
 if (isMobile) document.getElementById('chatInput').placeholder = '💬 Chat...';
@@ -76,6 +99,17 @@ function updateCamera(dt) {
   const h = app.height || 1;
   const fv = playFov(); if (camera.fov !== fv) { camera.fov = fv; camera.updateProjectionMatrix(); }
   let pos, target;
+  if (cine && camMode === 'play') {
+    // quay vòng quanh nhân vật, từ toàn thân lại gần mặt
+    const k = Math.min(1, (clock.elapsedTime - cine.t0) / cine.dur);
+    const ease = 1 - Math.pow(1 - k, 3);
+    const ang = me.ry + Math.PI * 1.15 - ease * Math.PI * 1.15;
+    const dist = 6.5 - ease * 4.1, hy = (app.height || 1);
+    camera.position.set(me.x + Math.sin(ang) * dist, (3.6 - ease * 2.2) * hy, me.z + Math.cos(ang) * dist);
+    camera.lookAt(me.x, (0.9 + ease * 0.45) * hy, me.z);
+    return;
+  }
+  if (window.__camOverride) { const o = window.__camOverride; camera.position.set(...o.p); camera.lookAt(...o.t); return; } // chỉ dùng khi chụp thử
   if (camMode === 'creator') {
     const fx = Math.sin(me.ry), fz = Math.cos(me.ry);
     const rx = Math.cos(me.ry), rz = -Math.sin(me.ry);
@@ -127,7 +161,7 @@ function updateCamera(dt) {
       if (hit) { const g = Math.max(0.15, (i - 1) / N); pos.set(target.x + (pos.x - target.x) * g, target.y + (pos.y - target.y) * g, target.z + (pos.z - target.z) * g); break; }
     }
   }
-  const k = Math.min(1, dt * 8);
+  const k = camSnap ? 1 : Math.min(1, dt * 8); camSnap = false;
   camera.position.lerp(pos, k);
   camTarget.lerp(target, k);
   camera.lookAt(camTarget);
@@ -235,12 +269,14 @@ function updateMe(dt, t) {
   if (me.emoteUntil > t) anim = me.emote;
   if (stunned) anim = 'stun';
   if (me.qchangeUntil > t) anim = 'qchange';
+  if (cine && !(me.qchangeUntil > t)) anim = t - cine.t0 > 2.2 ? 'wave' : 'dance';
   me.anim = anim;
   me.char.group.position.set(me.x, 0, me.z);
   me.char.group.rotation.y = me.ry;
   me.char.animate(anim, t, moving, !!me.holding);
   me.char.setHolding(me.holding);
   myLabel.sprite.position.set(me.x, ((me.char.topY || 1.6) + 0.2) * (app.height || 1), me.z);
+  myLabel.sprite.visible = !cine;
 }
 function emote(e) { me.emote = e; me.emoteUntil = clock.elapsedTime + (e === 'wave' ? 2 : 4); }
 document.querySelectorAll('.emotes button').forEach((b) => b.addEventListener('click', () => {
@@ -508,7 +544,7 @@ function sfx(kind) {
 }
 
 // ================= HUD =================
-function styleOf(a) { return (D.OUTFITS.find((o) => o.id === a.outfit) || D.OUTFITS[0]).style; }
+function styleOf(a) { const m = a.model && modelInfo(a.model); if (m && m.style) return m.style; return (D.OUTFITS.find((o) => o.id === a.outfit) || D.OUTFITS[0]).style; }
 function refreshStyleBadges() {
   const s = styleOf(app);
   for (const el of [$('#styleBadge'), $('#myStyle')]) { el.className = 'badge ' + s; el.textContent = 'Phong cách: ' + D.STYLE_NAMES[s]; }
@@ -570,6 +606,9 @@ function showBubble(id, text) {
 
 // ================= Creator (tủ đồ + makeup) =================
 const CREATOR = [
+  { tab: '✨ Nhân vật 3D', model: true, items: [
+    { key: 'model', label: 'Chọn kiểu nhân vật', type: 'cards', options: [] },
+  ] },
   { tab: 'Trang phục', items: [
     { key: 'outfit', label: 'Kiểu đồ', type: 'cards', options: D.OUTFITS.map((o) => ({ id: o.id, name: o.name, style: o.style })) },
     { key: 'outfitColor', label: 'Màu đồ', type: 'swatch', options: D.OUTFIT_COLORS },
@@ -624,7 +663,9 @@ function renderCreator() {
     crTab = +b.dataset.tab; setView(CREATOR[crTab].face ? 'face' : 'full'); renderCreator();
   });
   const tab = CREATOR[crTab];
-  $('.cr-body').innerHTML = tab.items.map((it) => {
+  if (tab.model) tab.items[0].options = [{ id: 'none', name: '🧱 Người khối (tự makeup, thay đồ)', style: styleOf({ ...app, model: 'none' }) }, ...girlModels().map((m) => ({ id: m.id, name: '✨ ' + m.name, style: m.style }))];
+  const note = app.model && app.model !== 'none' && !tab.model ? '<div class="howto" style="margin:0 0 8px">Đang dùng nhân vật 3D nên phần này chỉ áp dụng cho người khối. Muốn tự makeup, vào tab ✨ chọn "Người khối".</div>' : '';
+  $('.cr-body').innerHTML = note + tab.items.map((it) => {
     const v = app[it.key];
     let ctl = '';
     const lk = (val) => lockOf(it.key, val);
@@ -766,6 +807,7 @@ socket.on('init', (d) => {
   myId = d.you; joined = true;
   timeOffset = d.now - Date.now();
   FEAT = d.features || {}; applyFeatures();
+  decorDefs = d.decor || {}; homeStyles = d.homeStyles || { wall: {}, floor: {} }; homeSlots = d.homeSlots || {}; myHome = d.myHome || null;
   shopDefs = d.shop || []; levelDefs = d.levels || []; owned = d.owned || []; myEarned = d.earned || 0; quests = d.quests || []; shiftEnd = d.shiftEnd || 0;
   myLevel = d.players[myId] ? d.players[myId].level : 0;
   if (d.app) { app = { ...app, ...d.app, uniform: false }; me.char.update(app); store.set('ktv_app_khoi', app); }
@@ -785,13 +827,13 @@ socket.on('init', (d) => {
 });
 function addPlayer(p) {
   if (players.has(p.id)) removePlayer(p.id);
-  const char = createGirl({ ...DEFAULT, ...p.app });
+  const char = makeGirl({ ...DEFAULT, ...p.app });
   scene.add(char.group);
   const label = makeLabel(512, 96, 1);
   levelsById.set(p.id, p.level || 0);
   drawNameLabel(label, p.name, p.money, false, p.level || 0);
   scene.add(label.sprite);
-  players.set(p.id, { char, label, name: p.name, money: p.money, x: p.x, z: p.z, ry: p.ry, tx: p.x, tz: p.z, tr: p.ry, anim: 'idle', holding: null, app: p.app, moving: 0 });
+  players.set(p.id, { space: p.space || '', char, label, name: p.name, money: p.money, x: p.x, z: p.z, ry: p.ry, tx: p.x, tz: p.z, tr: p.ry, anim: 'idle', holding: null, app: p.app, moving: 0 });
 }
 function removePlayer(id) {
   const p = players.get(id); if (!p) return;
@@ -806,7 +848,7 @@ socket.on('players', (all) => {
   for (const [id, v] of Object.entries(all)) {
     if (id === myId) { if (v[5] !== myMoney) { myMoney = v[5]; changed = true; } continue; }
     const p = players.get(id); if (!p) continue;
-    p.tx = v[0]; p.tz = v[1]; p.tr = v[2]; p.anim = v[3]; p.holding = v[4];
+    p.tx = v[0]; p.tz = v[1]; p.tr = v[2]; p.anim = v[3]; p.holding = v[4]; if (v[6] !== undefined && v[6] !== p.space) { p.space = v[6]; p.x = p.tx; p.z = p.tz; }
     if (p.money !== v[5]) { p.money = v[5]; changed = true; }
   }
   if (changed) refreshHUD();
@@ -909,8 +951,12 @@ $('#btnQuest').addEventListener('click', () => { renderQuests(); openModal('#que
 socket.on('quests', (q) => { quests = q; if ($('#questModal').classList.contains('show')) renderQuests(); });
 socket.on('questDone', ({ text, reward }) => { floater(`📋 +${D.fmtMoney(reward)}<small>Xong nhiệm vụ: ${escapeHtml(text)}</small>`); sfx('level'); });
 socket.on('levelUp', ({ id, level }) => {
-  if (id === myId) { myLevel = level; drawNameLabel(myLabel, myName, 0, true, level); floater(`🎊 LÊN CẤP!<small>${levelDefs[level].icon} ${levelDefs[level].name}</small>`); sfx('level'); fireworksAt(me.x, me.z); }
-  else { const p = players.get(id); if (p) { levelsById.set(id, level); drawNameLabel(p.label, p.name, p.money, false, level); } }
+  if (id === myId) { myLevel = level; drawNameLabel(myLabel, myName, 0, true, level); playRankUp(level); }
+  else {
+    const p = players.get(id);
+    if (p) { levelsById.set(id, level); drawNameLabel(p.label, p.name, p.money, false, level); goldPillar(p, 5); fireworksAt(p.x, p.z); }
+    if (p && levelDefs[level]) toast(`🎊 ${p.name} vừa được thăng cấp ${levelDefs[level].icon} ${levelDefs[level].name}!`);
+  }
 });
 
 // ---------- Tặng quà ----------
@@ -1258,7 +1304,7 @@ function reached(tg) {
   return false;
 }
 function startGoto(x, z, target = null) {
-  const path = findPath(me.x, me.z, x, z);
+  const path = mySpace ? [{ x, z }] : findPath(me.x, me.z, x, z);
   if (!path || !path.length) { if (target && reached(target)) { interact(target); return; } toast('Không đi tới chỗ đó được 😅'); return; }
   goto = { path, target, repathAt: performance.now() + 700 };
   const end = path[path.length - 1];
@@ -1289,6 +1335,7 @@ const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), groundPlane = new 
 function clickTo(cx, cy) {
   if (!joined || camMode !== 'play' || me.busy || isMinigameOpen()) return;
   initMusic();
+  if (mySpace) { homeClick(cx, cy); return; }
   ndc.set((cx / innerWidth) * 2 - 1, -(cy / innerHeight) * 2 + 1);
   ray.setFromCamera(ndc, camera);
   // 1) bấm trúng người khách
@@ -1358,7 +1405,12 @@ function quickChange() {
   const outfits = D.OUTFITS.map((o) => o.id).filter((id) => !lockOf('outfit', id));
   const others = outfits.filter((id) => id !== app.outfit);
   const col = D.OUTFIT_COLORS.filter((c) => c !== app.outfitColor);
-  const next = { outfit: others.length ? others[Math.floor(Math.random() * others.length)] : app.outfit, outfitColor: col[Math.floor(Math.random() * col.length)] };
+  let next = { outfit: others.length ? others[Math.floor(Math.random() * others.length)] : app.outfit, outfitColor: col[Math.floor(Math.random() * col.length)] };
+  // có nhân vật 3D: đổi qua lại giữa các nhân vật 3D / người khối
+  const ms = girlModels().map((m) => m.id);
+  if (app.model && app.model !== 'none') { const o2 = ms.filter((x) => x !== app.model); next = { model: o2.length ? o2[Math.floor(Math.random() * o2.length)] : 'none' }; }
+  else if (ms.length && Math.random() < 0.35) next = { model: ms[Math.floor(Math.random() * ms.length)] };
+  if (next.model && next.model !== 'none') preloadModel(next.model);
   quickBusy = true;
   const wasPole = me.emote === 'pole' && me.emoteUntil > clock.elapsedTime;
   me.qchangeUntil = clock.elapsedTime + 1.6;
@@ -1369,7 +1421,7 @@ function quickChange() {
     setApp(next);
     glitterAt(me.x, me.z, 90);
     sfx('tip');
-    const o = D.OUTFITS.find((x) => x.id === next.outfit);
+    const o = next.model ? modelInfo(next.model) || { name: 'Người khối' } : D.OUTFITS.find((x) => x.id === next.outfit);
     floater(`✨ TA-DA! ✨<small>${o ? o.name : ''}</small>`);
   }, 800);
   setTimeout(() => { quickBusy = false; if (wasPole) { me.emote = 'pole'; me.emoteUntil = 1e9; } }, 1700);
@@ -1501,6 +1553,245 @@ $('#btnFull').addEventListener('click', toggleFull);
 $('#btnClean').addEventListener('click', () => toggleClean());
 $('#btnUnclean').addEventListener('click', () => toggleClean(false));
 
+
+// =====================================================================
+// 👑 MÀN THĂNG CẤP: thanh đen điện ảnh, cột sáng vàng, cánh hoa rơi,
+// camera xoay quanh nhân vật, "chiếu chỉ" của quản lý quán
+// =====================================================================
+let cine = null;
+const pillars = [];
+function goldPillar(target, secs = 6) {
+  const g = new THREE.Group();
+  const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 1.1, 7, 32, 1, true), new THREE.MeshBasicMaterial({ color: '#ffd76a', transparent: true, opacity: 0.0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+  cone.position.y = 3.5; g.add(cone);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.6, 1.25, 48), new THREE.MeshBasicMaterial({ color: '#ffe08a', transparent: true, opacity: 0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; g.add(ring);
+  const rays = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 4.2), new THREE.MeshBasicMaterial({ map: raysTex(), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+  rays.position.y = 1.2; g.add(rays);
+  scene.add(g);
+  pillars.push({ g, cone, ring, rays, target, t: 0, life: secs });
+}
+let _rays = null;
+function raysTex() {
+  if (_rays) return _rays;
+  const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
+  x.translate(128, 128);
+  for (let i = 0; i < 16; i++) {
+    x.rotate(Math.PI / 8);
+    const gr = x.createLinearGradient(0, 0, 0, -128); gr.addColorStop(0, 'rgba(255,220,120,0.9)'); gr.addColorStop(1, 'rgba(255,220,120,0)');
+    x.fillStyle = gr; x.beginPath(); x.moveTo(-6, 0); x.lineTo(-16, -128); x.lineTo(16, -128); x.lineTo(6, 0); x.fill();
+  }
+  _rays = new THREE.CanvasTexture(c); return _rays;
+}
+const petals = [];
+const petalGeo = new THREE.PlaneGeometry(0.09, 0.06);
+function petalRain(x, z, n = 140) {
+  const cols = ['#ffd54f', '#ffe9a8', '#ff8fb8', '#ffffff', '#f6b73c'];
+  for (let i = 0; i < n; i++) {
+    const m = new THREE.Mesh(petalGeo, new THREE.MeshBasicMaterial({ color: cols[i % cols.length], side: THREE.DoubleSide, transparent: true, depthWrite: false }));
+    const a = Math.random() * Math.PI * 2, r = Math.random() * 2.6;
+    m.position.set(x + Math.cos(a) * r, 3 + Math.random() * 3.5, z + Math.sin(a) * r);
+    scene.add(m);
+    petals.push({ m, vy: 0.5 + Math.random() * 0.6, sway: Math.random() * 6, spin: 2 + Math.random() * 5, life: 6 + Math.random() * 2 });
+  }
+}
+function fanfare() {
+  // kèn hiệu "tò te" kiểu sắc phong
+  try {
+    const out = audioOut(); const ctx = out ? out.ctx : (actx || (actx = new (window.AudioContext || window.webkitAudioContext)()));
+    const dest = out ? out.node : ctx.destination;
+    const seq = [[523, 0, 0.18], [523, 0.2, 0.12], [523, 0.34, 0.12], [698, 0.5, 0.5], [880, 1.05, 0.25], [784, 1.32, 0.18], [880, 1.52, 0.18], [1047, 1.75, 1.0]];
+    for (const [f, d, len] of seq) for (const [type, mul, vol] of [['sawtooth', 1, 0.06], ['triangle', 2, 0.05]]) {
+      const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.value = f * mul;
+      const t0 = ctx.currentTime + d;
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.03); g.gain.setValueAtTime(vol, t0 + len * 0.7); g.gain.exponentialRampToValueAtTime(0.0001, t0 + len);
+      o.connect(g).connect(dest); o.start(t0); o.stop(t0 + len + 0.05);
+    }
+  } catch (e) {}
+}
+const DECREES = [
+  null,
+  (n) => `"Xét thấy <b>${n}</b> rót bia không đổ, cười không tắt, nay cho lên làm chính thức."`,
+  (n) => `"Xét thấy <b>${n}</b> nhan sắc làm khách quên đường về, nay phong làm gương mặt của quán."`,
+  (n) => `"Xét thấy <b>${n}</b> một tay gánh doanh thu, nay giao luôn chìa khóa quán!"`,
+];
+function playRankUp(level) {
+  const L = levelDefs[level]; if (!L) return;
+  closeModals();
+  cancelGoto();
+  cine = { t0: clock.elapsedTime, dur: 5.2, level };
+  me.qchangeUntil = clock.elapsedTime + 1.6;
+  document.body.classList.add('cutscene');
+  $('#cineDecree').innerHTML = (DECREES[level] || DECREES[1])(myName);
+  $('#cineRank').textContent = `${L.icon} ${L.name.toUpperCase()}`;
+  const perks = [];
+  if (L.bonus) perks.push(`💰 Tiền bo +${Math.round(L.bonus * 100)}%`);
+  shopDefs.filter((it) => (it.level || 0) === level).forEach((it) => perks.push(`🔓 ${it.name}`));
+  perks.push('🏷️ Huy hiệu mới trên tên');
+  $('#cinePerks').innerHTML = perks.map((x) => `<span>${x}</span>`).join('');
+  const el = $('#cine'); el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  goldPillar(null, 7.5);
+  setTimeout(() => { glitterAt(me.x, me.z, 90); petalRain(me.x, me.z); fanfare(); }, 700);
+  setTimeout(() => fireworksAt(me.x, me.z), 2300);
+  setTimeout(() => fireworksAt(me.x + 1, me.z - 1), 3100);
+  cine.timer = setTimeout(endRankUp, 6800);
+}
+function endRankUp() {
+  if (!cine) return;
+  clearTimeout(cine.timer);
+  cine = null;
+  $('#cine').classList.remove('show');
+  document.body.classList.remove('cutscene');
+}
+$('#cine').addEventListener('click', () => { if (cine && clock.elapsedTime - cine.t0 > 1.5) endRankUp(); });
+function updateCine(dt, t) {
+  for (let i = pillars.length - 1; i >= 0; i--) {
+    const P = pillars[i]; P.t += dt;
+    const pos = P.target ? P.target : me;
+    P.g.position.set(pos.x, 0, pos.z);
+    const fade = Math.min(1, P.t / 0.6) * Math.min(1, (P.life - P.t) / 1);
+    P.cone.material.opacity = 0.22 * fade; P.ring.material.opacity = 0.7 * fade; P.rays.material.opacity = 0.55 * fade;
+    P.rays.lookAt(camera.position); P.rays.rotateZ(t * 0.6);
+    P.ring.scale.setScalar(1 + Math.sin(t * 4) * 0.06);
+    if (P.t > P.life) { scene.remove(P.g); pillars.splice(i, 1); }
+  }
+  for (let i = petals.length - 1; i >= 0; i--) {
+    const p = petals[i]; p.life -= dt;
+    p.m.position.y -= p.vy * dt; p.m.position.x += Math.sin(t * 2 + p.sway) * dt * 0.4;
+    p.m.rotation.x += p.spin * dt; p.m.rotation.y += p.spin * 0.7 * dt;
+    p.m.material.opacity = Math.min(1, p.life);
+    if (p.life <= 0 || p.m.position.y < 0.02) { scene.remove(p.m); p.m.material.dispose(); petals.splice(i, 1); }
+  }
+}
+
+
+// =====================================================================
+// 🏠 PHÒNG RIÊNG
+// =====================================================================
+let decorDefs = {}, homeStyles = { wall: {}, floor: {} }, homeSlots = {}, myHome = null;
+let mySpace = '', viewing = null, decorSlot = null, decorTab = 'items';
+const isOwner = () => viewing && myHome && viewing.key === (myName || '').trim().toLowerCase().normalize('NFC');
+function homeInfoHTML(h) { return `🏠 Phòng của ${escapeHtml(h.owner)}<small>❤️ ${h.likes || 0} · ✨ ${h.score || 0} điểm sang chảnh</small>`; }
+function refreshHomeBar() {
+  if (!viewing) return;
+  $('#homeInfo').innerHTML = homeInfoHTML(viewing);
+  $('#btnDecor').style.display = isOwner() ? '' : 'none';
+  $('#btnLike').style.display = isOwner() ? 'none' : '';
+  $('#btnDecor').classList.toggle('on', home.editing);
+  $('#btnDecor').textContent = home.editing ? '✅ Xong trang trí' : '🎨 Trang trí';
+}
+function openHomeModal() {
+  const h = myHome || {};
+  const placed = Object.values(h.slots || {}).filter(Boolean).length;
+  $('#homeMine').innerHTML = `<span>❤️ ${h.likes || 0} lượt thả tim</span><span>✨ ${h.score || 0} điểm sang chảnh</span><span>🛋️ ${placed}/${Object.keys(homeSlots).length} chỗ đã bày</span>`;
+  const list = [...players.values()];
+  $('#homeVisitList').innerHTML = list.length ? list.map((p) => `<div class="row"><span>${escapeHtml(p.name)}</span><button class="btn" data-visit="${escapeHtml(p.name)}">Ghé thăm 🚪</button></div>`).join('') : '<div class="howto">Trong quán chưa có ai khác. Bạn vẫn gõ tên bạn bè để ghé phòng họ được.</div>';
+  $('#homeVisitList').querySelectorAll('[data-visit]').forEach((b) => b.onclick = () => enterHome(b.dataset.visit));
+  openModal('#homeModal');
+}
+function enterHome(name) {
+  socket.emit('homeGet', { name }, (res) => {
+    if (!res || !res.ok) { toast((res && res.msg) || 'Không vào được phòng này 😅'); return; }
+    closeModals(); cancelGoto();
+    viewing = res.home;
+    home.setHome(viewing); home.setEditing(false);
+    mySpace = viewing.key;
+    socket.emit('homeEnter', { key: viewing.key });
+    me.x = HOME_SPAWN.x; me.z = HOME_SPAWN.z; me.ry = Math.PI; camYaw = 0; camSnap = true;
+    me.holding = null;
+    document.body.classList.add('in-home');
+    $('#homeBar').classList.remove('hidden');
+    refreshHomeBar();
+    sfx('coin');
+    if (isOwner() && !Object.keys(viewing.slots || {}).length) setTimeout(() => toast('Phòng còn trống trơn! Bấm 🎨 Trang trí rồi chạm vào vòng tròn vàng để bày đồ nha ✨'), 600);
+  });
+}
+function leaveHome() {
+  if (!mySpace) return;
+  home.setEditing(false); closeModals();
+  mySpace = ''; viewing = null;
+  socket.emit('homeEnter', { key: '' });
+  me.x = 0; me.z = 6.2; me.ry = Math.PI; camSnap = true;
+  document.body.classList.remove('in-home');
+  $('#homeBar').classList.add('hidden');
+}
+function homeClick(cx, cy) {
+  if (home.editing) { const k = home.slotAtScreen(cx, cy, camera); if (k) { openDecor(k); return; } }
+  ndc.set((cx / innerWidth) * 2 - 1, -(cy / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const p = new THREE.Vector3();
+  if (!ray.ray.intersectPlane(groundPlane, p)) return;
+  if (Math.hypot(p.x - HOME_DOOR.x, p.z - HOME_DOOR.z) < 1.1) { leaveHome(); return; }
+  const x = Math.max(HOME.x - HOME.hw + 0.4, Math.min(HOME.x + HOME.hw - 0.4, p.x));
+  const z = Math.max(HOME.z - HOME.hd + 0.4, Math.min(HOME.z + HOME.hd - 0.4, p.z));
+  startGoto(x, z, null);
+}
+function openDecor(slot) {
+  decorSlot = slot; decorTab = slot ? 'items' : 'style';
+  renderDecor(); openModal('#decorModal');
+}
+function renderDecor() {
+  const h = myHome || {}; const decor = h.decor || {}, slots = h.slots || {};
+  $('#decorTitle').innerHTML = decorSlot ? `🎨 ${SLOT_NAMES[decorSlot]} <small>Tiền bo: <b style="color:#ffd54f">${D.fmtMoney(myMoney)}</b></small>` : `🎨 Tường & sàn <small>Tiền bo: <b style="color:#ffd54f">${D.fmtMoney(myMoney)}</b></small>`;
+  $('#decorTabs').innerHTML = (decorSlot ? '<button data-dt="items" class="' + (decorTab === 'items' ? 'on' : '') + '">🛋️ Đồ đạc</button>' : '') + '<button data-dt="style" class="' + (decorTab === 'style' ? 'on' : '') + '">🧱 Tường & sàn</button>';
+  $('#decorTabs').querySelectorAll('[data-dt]').forEach((b) => b.onclick = () => { decorTab = b.dataset.dt; renderDecor(); });
+  let html = '';
+  if (decorTab === 'items' && decorSlot) {
+    const type = homeSlots[decorSlot];
+    const cur = slots[decorSlot];
+    if (cur) html += `<div class="store-item hl"><div><b>${decorDefs[cur].icon} ${decorDefs[cur].name}</b><small>Đang bày ở đây</small></div><button class="btn" data-rm="1">Cất đi</button></div>`;
+    for (const [id, d] of Object.entries(decorDefs)) {
+      if (d.slot !== type || id === cur) continue;
+      const have = decor[id] || 0, used = Object.entries(slots).filter(([k, v]) => v === id && k !== decorSlot).length;
+      const free = have - used;
+      html += `<div class="store-item decor-card"><div><span class="ic">${d.icon}</span> <b>${d.name}</b><small class="meta">${have ? `Đã có ${have} (rảnh ${Math.max(0, free)})` : 'Chưa có'} · giá ${D.fmtMoney(d.price)}</small></div>`
+        + (free > 0 ? `<button class="btn primary" data-put="${id}">Bày ra</button>` : `<button class="btn" data-buy="${id}" ${myMoney < d.price ? 'disabled' : ''}>Mua ${D.fmtMoney(d.price)}</button>`) + '</div>';
+    }
+  } else {
+    for (const kind of ['wall', 'floor']) {
+      html += `<div class="cr-label">${kind === 'wall' ? '🧱 Giấy dán tường' : '🟫 Sàn nhà'}</div>`;
+      for (const [id, st] of Object.entries(homeStyles[kind] || {})) {
+        const ownedSt = !st.price || (h.styles || []).includes(kind + ':' + id);
+        const on = h[kind] === id;
+        html += `<div class="store-item ${on ? 'hl' : ''}"><div><b>${st.name}</b><small>${on ? 'Đang dùng' : ownedSt ? 'Đã có' : 'Giá ' + D.fmtMoney(st.price)}</small></div>${on ? '' : `<button class="btn ${ownedSt ? 'primary' : ''}" data-style="${kind}:${id}" ${!ownedSt && myMoney < st.price ? 'disabled' : ''}>${ownedSt ? 'Dùng' : 'Mua'}</button>`}</div>`;
+      }
+    }
+  }
+  $('#decorList').innerHTML = html;
+  const after = (res) => {
+    if (!res || !res.ok) { toast((res && res.msg) || 'Chưa làm được 😅'); return; }
+    myHome = { ...myHome, ...res.home, score: res.score ?? (myHome && myHome.score) };
+    if (res.money != null) myMoney = res.money;
+    if (viewing && isOwner()) { viewing = { ...viewing, wall: myHome.wall, floor: myHome.floor, slots: { ...myHome.slots }, score: myHome.score }; home.setHome(viewing); refreshHomeBar(); }
+    refreshHUD(); renderDecor();
+  };
+  $('#decorList').querySelectorAll('[data-buy]').forEach((b) => b.onclick = () => socket.emit('homeBuy', { id: b.dataset.buy }, (res) => {
+    if (res && res.ok) { sfx('coin'); myHome = { ...myHome, ...res.home }; myMoney = res.money; socket.emit('homeSet', { slot: decorSlot, id: b.dataset.buy }, (r2) => { after(r2); if (r2 && r2.ok) { glitterAt(me.x, me.z, 30); toast('✨ Đã mua và bày ra rồi!'); } }); }
+    else after(res);
+  }));
+  $('#decorList').querySelectorAll('[data-put]').forEach((b) => b.onclick = () => socket.emit('homeSet', { slot: decorSlot, id: b.dataset.put }, after));
+  $('#decorList').querySelectorAll('[data-rm]').forEach((b) => b.onclick = () => socket.emit('homeSet', { slot: decorSlot, id: null }, after));
+  $('#decorList').querySelectorAll('[data-style]').forEach((b) => b.onclick = () => { const [kind, id] = b.dataset.style.split(':'); socket.emit('homeStyle', { kind, id }, after); });
+}
+$('#btnHome').addEventListener('click', () => { if (mySpace) leaveHome(); else openHomeModal(); });
+$('#btnGoHome').addEventListener('click', () => enterHome(myName));
+$('#btnVisitName').addEventListener('click', () => { const n = $('#homeName').value.trim(); if (n) enterHome(n); });
+$('#btnLeaveHome').addEventListener('click', leaveHome);
+$('#btnDecor').addEventListener('click', () => {
+  home.setEditing(!home.editing); refreshHomeBar();
+  if (home.editing) toast('Chạm vào vòng tròn vàng để bày đồ. Muốn đổi tường & sàn thì chạm vòng ở giữa phòng nha!');
+});
+$('#btnLike').addEventListener('click', () => {
+  if (!viewing) return;
+  socket.emit('homeLike', { key: viewing.key }, (res) => {
+    if (!res || !res.ok) { toast((res && res.msg) || 'Chưa thả tim được'); return; }
+    viewing.likes = res.likes; refreshHomeBar(); sfx('tip');
+    for (let i = 0; i < 3; i++) setTimeout(() => floater('❤️'), i * 150);
+  });
+});
+socket.on('homeUpdate', (d) => { if (viewing && d.key === viewing.key) { viewing = d; home.setHome(d); refreshHomeBar(); } if (myHome && isOwner()) { myHome.likes = d.likes; } });
+socket.on('space', ({ id, space }) => { const p = players.get(id); if (p) p.space = space || ''; });
+
 // ================= Main loop =================
 const clock = new THREE.Clock();
 function loop() {
@@ -1515,6 +1806,7 @@ function loop() {
     let d = p.tr - p.ry; d = Math.atan2(Math.sin(d), Math.cos(d)); p.ry += d * Math.min(1, dt * 10);
     const moving = Math.hypot(p.x - ox, p.z - oz) > 0.002 ? 1 : 0;
     p.char.group.position.set(p.x, 0, p.z); p.char.group.rotation.y = p.ry;
+    const here = (p.space || '') === mySpace; p.char.group.visible = here; p.label.sprite.visible = here;
     p.char.animate(p.anim === 'walk' && !moving ? 'idle' : p.anim, t, moving || (p.anim === 'walk' ? 1 : 0), !!p.holding);
     p.char.setHolding(p.holding);
     setStars(p.id, p.anim === 'stun', p.x, p.z);
@@ -1524,6 +1816,7 @@ function loop() {
   }
   for (const e of customers.values()) {
     placeCustomer(e);
+    e.label.sprite.visible = !mySpace; // nhãn chữ xuyên tường: ẩn khi đang ở phòng riêng
     e.obj.animate(t, e.data, e.off);
     // làm mới câu thoại khi hết 4 giây
     if (e.data.line && Date.now() - e.data.lineAt > 4000 && e.key.indexOf('"stale"') < 0) { drawCustomerLabel(e.label, e.data); e.key += '"stale"'; }
@@ -1536,14 +1829,18 @@ function loop() {
   }
   updateFx(dt, t);
   updateGlitter(dt);
+  updateCine(dt, t);
+  if (mySpace) home.update(t);
+  if (ghenFx) ghenFx.label.sprite.visible = !mySpace;
+  for (const b of bubbles.values()) b.sprite.visible = !mySpace;
   if (marker.visible) { const s = 1 + Math.sin(t * 8) * 0.12; marker.scale.set(s, s, s); }
-  myLabel.sprite.visible = camMode === 'play';
+  myLabel.sprite.visible = camMode === 'play' && !cine;
   world.update(t, gameState.upgrades);
   updateCamera(dt);
   updatePrompt();
-  setZone(zoneAt(me.x, me.z));
+  setZone(mySpace ? 'lobby' : zoneAt(me.x, me.z));
   sendMove(t);
-  renderer.render(scene, camera);
+  if (composer) composer.render(); else renderer.render(scene, camera);
   afterRender();
 }
 camera.position.set(0, 3, 8);
@@ -1552,4 +1849,4 @@ loop();
 refreshStyleBadges();
 
 // cho phép chạy thử tự động
-window.__ktv = { takeShot, startRec, stopRec, toggleClean, quickChange, clickTo, get goto() { return goto; }, runMinigame, me, customers, players, socket, interact, setApp, openCreator, closeCreator, openStore, get app() { return app; }, get owned() { return owned; }, get myMoney() { return myMoney; }, scene, camera, renderer };
+window.__ktv = { enterHome, leaveHome, openDecor, home, get mySpace() { return mySpace; }, get myHome() { return myHome; }, get cine() { return cine; }, playRankUp, takeShot, startRec, stopRec, toggleClean, quickChange, clickTo, get goto() { return goto; }, runMinigame, me, customers, players, socket, interact, setApp, openCreator, closeCreator, openStore, get app() { return app; }, get owned() { return owned; }, get myMoney() { return myMoney; }, scene, camera, renderer };
