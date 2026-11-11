@@ -278,6 +278,68 @@ function ensureQuests(p) {
   p.dirty = true;
   return p.quests;
 }
+
+// =====================================================================
+// PHÒNG RIÊNG: mỗi tài khoản 1 phòng, mua đồ trang trí bằng tiền bo
+// (dữ liệu cũ không bị đụng tới: ai chưa có phòng thì dùng phòng trống mặc định)
+// =====================================================================
+const DECOR = {
+  // đồ đặt sàn
+  plant: { name: 'Cây monstera', icon: '🪴', price: 200, slot: 'floor' },
+  bear: { name: 'Gấu bông khổng lồ', icon: '🧸', price: 400, slot: 'floor' },
+  shoes: { name: 'Kệ giày cao gót', icon: '👠', price: 700, slot: 'floor' },
+  sofa: { name: 'Sofa nhung đôi', icon: '🛋️', price: 800, slot: 'floor' },
+  mannequin: { name: 'Ma-nơ-canh đầm dạ hội', icon: '👗', price: 900, slot: 'floor' },
+  speaker: { name: 'Dàn loa karaoke', icon: '🔊', price: 1000, slot: 'floor' },
+  vanity: { name: 'Bàn trang điểm đèn LED', icon: '💄', price: 1200, slot: 'floor' },
+  wardrobe: { name: 'Tủ đồ hiệu cửa kính', icon: '🚪', price: 1500, slot: 'floor' },
+  minibar: { name: 'Quầy rượu mini', icon: '🍸', price: 1800, slot: 'floor' },
+  aquarium: { name: 'Bể cá cảnh', icon: '🐠', price: 2500, slot: 'floor' },
+  piano: { name: 'Đàn piano trắng', icon: '🎹', price: 3500, slot: 'floor' },
+  // treo tường
+  poster: { name: 'Ảnh tự sướng khổ lớn', icon: '🤳', price: 150, slot: 'wall' },
+  frame: { name: 'Tranh nghệ thuật', icon: '🖼️', price: 300, slot: 'wall' },
+  neon: { name: 'Đèn neon "Lung Linh"', icon: '💡', price: 500, slot: 'wall' },
+  mirror: { name: 'Gương viền đèn', icon: '🪞', price: 600, slot: 'wall' },
+  tv: { name: 'TV 85 inch', icon: '📺', price: 1600, slot: 'wall' },
+  bags: { name: 'Kệ túi hiệu', icon: '👜', price: 2000, slot: 'wall' },
+  // thảm giữa phòng
+  rugfur: { name: 'Thảm lông trắng', icon: '⚪', price: 300, slot: 'rug' },
+  rugleo: { name: 'Thảm da báo', icon: '🐆', price: 500, slot: 'rug' },
+  rugred: { name: 'Thảm đỏ hoàng gia', icon: '🟥', price: 700, slot: 'rug' },
+  // trần
+  balloons: { name: 'Chùm bóng bay', icon: '🎈', price: 150, slot: 'ceil' },
+  disco: { name: 'Quả cầu disco', icon: '🪩', price: 600, slot: 'ceil' },
+  chand: { name: 'Đèn chùm pha lê', icon: '✨', price: 2200, slot: 'ceil' },
+};
+const HOME_STYLES = {
+  wall: { damask: { name: 'Hoa văn tím', price: 0 }, pink: { name: 'Hồng phấn', price: 200 }, marble: { name: 'Đá cẩm thạch', price: 600 }, gold: { name: 'Vàng hoàng gia', price: 1500 } },
+  floor: { wood: { name: 'Sàn gỗ', price: 0 }, carpet: { name: 'Thảm hồng', price: 300 }, checker: { name: 'Caro đen trắng', price: 400 }, marble: { name: 'Đá trắng bóng', price: 500 } },
+};
+const HOME_SLOTS = { W1: 'wall', W2: 'wall', W3: 'wall', W4: 'wall', F1: 'floor', F2: 'floor', F3: 'floor', F4: 'floor', F5: 'floor', F6: 'floor', F7: 'floor', R: 'rug', C: 'ceil' };
+const keyOfName = (n) => String(n || '').trim().toLowerCase().normalize('NFC');
+function homeOf(p) {
+  if (!p.home || typeof p.home !== 'object') p.home = {};
+  const h = p.home;
+  h.wall = HOME_STYLES.wall[h.wall] ? h.wall : 'damask';
+  h.floor = HOME_STYLES.floor[h.floor] ? h.floor : 'wood';
+  h.slots = h.slots && typeof h.slots === 'object' ? h.slots : {};
+  h.decor = h.decor && typeof h.decor === 'object' ? h.decor : {};
+  h.styles = Array.isArray(h.styles) ? h.styles : [];
+  h.likes = h.likes || 0;
+  return h;
+}
+function homeScore(h) {
+  let s = 0;
+  for (const id of Object.values(h.slots || {})) if (DECOR[id]) s += DECOR[id].price;
+  s += (HOME_STYLES.wall[h.wall] || { price: 0 }).price + (HOME_STYLES.floor[h.floor] || { price: 0 }).price;
+  return Math.round(s / 100);
+}
+const pubHome = (name, key, h) => ({ owner: name, key, wall: h.wall, floor: h.floor, slots: h.slots, likes: h.likes || 0, score: homeScore(h) });
+const likedToday = new Set(); // "khách|chủ|ngày"
+function playersInSpace(key) { return Object.values(state.players).filter((q) => q.space === key); }
+function pushHome(owner) { const h = homeOf(owner); const d = pubHome(owner.name, owner.key, h); for (const q of playersInSpace(owner.key)) io.to(q.id).emit('homeUpdate', d); }
+
 function questsPub(p) { const q = ensureQuests(p); return q.ids.map((id) => ({ id, ...QUESTS[id], prog: Math.min(QUESTS[id].target, q.prog[id] || 0), done: q.done.includes(id) })); }
 function progress(p, id, n = 1) {
   if (!p || !F.quests) return;
@@ -400,7 +462,7 @@ function tickPolice() {
   if (!police || now() < police.until) return;
   const fined = [];
   for (const p of Object.values(state.players)) {
-    if (police.ok.has(p.id)) continue;
+    if (police.ok.has(p.id) || p.space) continue; // đang ở phòng riêng thì công an không kiểm
     const fine = Math.min(100, p.money);
     p.money -= fine; p.dirty = true;
     io.to(p.id).emit('policeFine', { fine });
@@ -498,7 +560,7 @@ setInterval(() => {
 
 setInterval(() => {
   const out = {};
-  for (const p of Object.values(state.players)) out[p.id] = [p.x, p.z, p.ry, p.anim, p.holding, p.money];
+  for (const p of Object.values(state.players)) out[p.id] = [p.x, p.z, p.ry, p.anim, p.holding, p.money, p.space || ''];
   io.volatile.emit('players', out);
 }, 100);
 
@@ -511,7 +573,7 @@ function enforceOwned(app, owned) {
   for (const it of SHOP) if (app[it.key] === it.value && !owned.includes(it.id)) app[it.key] = SHOP_DEFAULT[it.key];
   return app;
 }
-function pubPlayer(p) { return { id: p.id, name: p.name, app: p.app, x: p.x, z: p.z, ry: p.ry, money: p.money, level: levelOf(p.earned) }; }
+function pubPlayer(p) { return { id: p.id, name: p.name, app: p.app, x: p.x, z: p.z, ry: p.ry, money: p.money, level: levelOf(p.earned), space: p.space || '' }; }
 
 // ---------- song ca giữa 2 người chơi ----------
 function finishDuet(did) {
@@ -598,14 +660,14 @@ io.on('connection', (socket) => {
     if (!Array.isArray(acc.owned)) acc.owned = SHOP.filter((it) => acc.app && acc.app[it.key] === it.value).map((it) => it.id);
     if (acc.earned == null) acc.earned = acc.money || 0;
     const app = enforceOwned(sanitizeApp(msg.app), acc.owned);
-    const p = { id: socket.id, key: acc.key, name: acc.name, app, x: 0, z: 3, ry: Math.PI, anim: 'idle', holding: null, money: acc.money || 0, served: acc.served || 0, earned: acc.earned, owned: acc.owned, quests: acc.quests || null, dirty: true };
+    const p = { id: socket.id, key: acc.key, name: acc.name, app, x: 0, z: 3, ry: Math.PI, anim: 'idle', holding: null, money: acc.money || 0, served: acc.served || 0, earned: acc.earned, owned: acc.owned, quests: acc.quests || null, home: acc.home || null, space: '', dirty: true };
     state.players[socket.id] = p;
     ensureQuests(p);
     const players = {}; for (const q of Object.values(state.players)) players[q.id] = pubPlayer(q);
     socket.emit('init', {
       you: socket.id, players, customers: Object.values(state.customers).map(pubCustomer),
       fund: state.fund, upgrades: state.upgrades, upgradeDefs: UPGRADES,
-      features: F, shop: F.shop ? SHOP : [], levels: F.levels ? LEVELS : [], owned: p.owned, earned: p.earned, quests: questsPub(p), app,
+      features: F, decor: DECOR, homeStyles: HOME_STYLES, homeSlots: HOME_SLOTS, myHome: { ...homeOf(p), score: homeScore(homeOf(p)) }, shop: F.shop ? SHOP : [], levels: F.levels ? LEVELS : [], owned: p.owned, earned: p.earned, quests: questsPub(p), app,
       shiftEnd: F.shift ? shift.start + SHIFT_MS : 0, now: now(),
       ghen: pubGhen(), police: police && { t0: police.t0, until: police.until }, blackout: !!blackout,
     });
@@ -618,7 +680,7 @@ io.on('connection', (socket) => {
   socket.on('move', (m = {}) => {
     const p = me(); if (!p) return;
     p.x = clamp(Number(m.x) || 0, -25, 25);
-    p.z = clamp(Number(m.z) || 0, -25, 25);
+    p.z = clamp(Number(m.z) || 0, -25, 75); // phòng riêng nằm ở z≈60
     p.ry = Number(m.ry) || 0;
     p.anim = String(m.anim || 'idle').slice(0, 10);
     p.holding = m.holding === 'fruit' || m.holding === 'water' ? m.holding : null;
@@ -819,6 +881,79 @@ io.on('connection', (socket) => {
     io.emit('feed', `${p.name} đã mua "${u.name}" cho quán 🎉`);
   });
 
+
+  // ---------- phòng riêng ----------
+  socket.on('homeGet', async ({ name } = {}, cb = () => {}) => {
+    const p = me(); if (!p) return cb({ ok: false });
+    const key = keyOfName(name || p.name);
+    const online = Object.values(state.players).find((q) => q.key === key);
+    if (online) return cb({ ok: true, home: pubHome(online.name, key, homeOf(online)) });
+    try {
+      const acc = await store.getAccount(key);
+      if (!acc) return cb({ ok: false, msg: 'Không tìm thấy nhân vật này' });
+      const live = liveCache.get(acc.key); const h = homeOf({ home: (live && live.home) || acc.home });
+      cb({ ok: true, home: pubHome(acc.name, acc.key, h) });
+    } catch (e) { cb({ ok: false }); }
+  });
+  socket.on('homeEnter', ({ key } = {}) => {
+    const p = me(); if (!p) return;
+    p.space = key ? keyOfName(key) : '';
+    for (const c of Object.values(state.customers)) if (c.servedBy === socket.id && p.space) { c.servedBy = null; c.servedName = null; }
+    io.emit('space', { id: p.id, space: p.space });
+    if (p.space && p.space !== p.key) {
+      const owner = Object.values(state.players).find((q) => q.key === p.space);
+      if (owner) io.to(owner.id).emit('toast', `🚪 ${p.name} vừa ghé thăm phòng bạn!`);
+    }
+  });
+  socket.on('homeBuy', ({ id } = {}, cb = () => {}) => {
+    const p = me(), d = DECOR[id]; if (!p || !d) return cb({ ok: false });
+    if (p.money < d.price) return cb({ ok: false, msg: 'Chưa đủ tiền bo 😢' });
+    const h = homeOf(p);
+    p.money -= d.price; h.decor[id] = (h.decor[id] || 0) + 1; p.dirty = true;
+    cb({ ok: true, home: h, money: p.money });
+  });
+  socket.on('homeSet', ({ slot, id } = {}, cb = () => {}) => {
+    const p = me(); if (!p || !HOME_SLOTS[slot]) return cb({ ok: false });
+    const h = homeOf(p);
+    if (!id) { delete h.slots[slot]; }
+    else {
+      const d = DECOR[id]; if (!d || d.slot !== HOME_SLOTS[slot]) return cb({ ok: false });
+      const used = Object.entries(h.slots).filter(([k, v]) => v === id && k !== slot).length;
+      if ((h.decor[id] || 0) <= used) return cb({ ok: false, msg: 'Bạn cần mua thêm món này' });
+      h.slots[slot] = id;
+    }
+    p.dirty = true; cb({ ok: true, home: h, score: homeScore(h) }); pushHome(p);
+  });
+  socket.on('homeStyle', ({ kind, id } = {}, cb = () => {}) => {
+    const p = me(); const st = HOME_STYLES[kind] && HOME_STYLES[kind][id]; if (!p || !st) return cb({ ok: false });
+    const h = homeOf(p), tag = kind + ':' + id;
+    if (st.price && !h.styles.includes(tag)) {
+      if (p.money < st.price) return cb({ ok: false, msg: 'Chưa đủ tiền bo 😢' });
+      p.money -= st.price; h.styles.push(tag);
+    }
+    h[kind] = id; p.dirty = true; cb({ ok: true, home: h, money: p.money, score: homeScore(h) }); pushHome(p);
+  });
+  socket.on('homeLike', async ({ key } = {}, cb = () => {}) => {
+    const p = me(); key = keyOfName(key); if (!p || !key || key === p.key) return cb({ ok: false });
+    const tag = `${p.key}|${key}|${new Date().toDateString()}`;
+    if (likedToday.has(tag)) return cb({ ok: false, msg: 'Hôm nay bạn thả tim phòng này rồi 💕' });
+    likedToday.add(tag);
+    const owner = Object.values(state.players).find((q) => q.key === key);
+    if (owner) {
+      const h = homeOf(owner); h.likes = (h.likes || 0) + 1; owner.dirty = true;
+      io.to(owner.id).emit('toast', `❤️ ${p.name} thả tim phòng của bạn!`); pushHome(owner);
+      return cb({ ok: true, likes: h.likes });
+    }
+    try {
+      const acc = await store.getAccount(key); if (!acc) return cb({ ok: false });
+      const live = liveCache.get(acc.key); const h = homeOf({ home: (live && live.home) || acc.home });
+      h.likes = (h.likes || 0) + 1;
+      if (live) live.home = h;
+      await store.saveAccount(acc.key, { home: h });
+      cb({ ok: true, likes: h.likes });
+    } catch (e) { cb({ ok: false }); }
+  });
+
   socket.on('chat', (text) => {
     const p = me(); const t = String(text || '').trim().slice(0, 80);
     if (!p || !t) return;
@@ -839,7 +974,7 @@ io.on('connection', (socket) => {
 // =====================================================================
 // LƯU DỮ LIỆU
 // =====================================================================
-function snap(p) { return { money: p.money, served: p.served || 0, app: p.app, earned: p.earned || 0, owned: p.owned || [], quests: p.quests || null }; }
+function snap(p) { const s = { money: p.money, served: p.served || 0, app: p.app, earned: p.earned || 0, owned: p.owned || [], quests: p.quests || null }; if (p.home) s.home = p.home; return s; }
 function savePlayer(p) {
   if (!p.key) return Promise.resolve();
   p.dirty = false;
@@ -865,7 +1000,7 @@ if (process.env.KTV_TEST) {
     else if (e === 'shift') { endShift(); res.send('ok'); }
     else if (e === 'flee') { const c = Object.values(state.customers).find((x) => x.st === 'seat'); if (c) { c.servedBy = c.servedBy || Object.keys(state.players)[0]; const r = Math.random; Math.random = () => 0; finishCustomer(c); Math.random = r; } res.send(String(!!c)); }
     else if (e === 'spawn') { const t = req.query.type; const r = roomsOpen().find((x) => takenSeats(x.id).length < x.seats); if (r && TYPES[t]) { const s = [...Array(r.seats).keys()].find((i) => !takenSeats(r.id).includes(i)); makeCustomer(t, r.id, s); } res.send('ok'); }
-    else if (e === 'money') { for (const p of Object.values(state.players)) { earn(p, Number(req.query.n) || 5000, { fund: false }); } res.send('ok'); }
+    else if (e === 'money') { for (const p of Object.values(state.players)) { if (req.query.name && p.name !== req.query.name) continue; earn(p, Number(req.query.n) || 5000, { fund: false }); } res.send('ok'); }
     else res.send('?');
   });
 }
