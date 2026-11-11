@@ -977,6 +977,7 @@ io.on('connection', (socket) => {
     } catch (e) { cb({ ok: false }); }
   });
 
+  socket.on('clientError', (msg) => { const p = me(); console.log('⚠️ LỖI TRÌNH DUYỆT', p ? p.name : '?', ':', String(msg).slice(0, 300)); });
   socket.on('chat', (text) => {
     const p = me(); const t = String(text || '').trim().slice(0, 80);
     if (!p || !t) return;
