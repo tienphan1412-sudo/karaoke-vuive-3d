@@ -1,3 +1,16 @@
 [
-  { "id": "hong", "name": "Váy ôm hồng trễ vai", "file": "hong.glb", "style": "goicam", "height": 1.66 }
+  {
+    "id": "hong",
+    "name": "Váy ôm hồng trễ vai",
+    "file": "hong.glb",
+    "style": "goicam",
+    "height": 1.66
+  },
+  {
+    "id": "bac",
+    "name": "Váy lụa bạc tóc bạch kim",
+    "file": "bac.glb",
+    "style": "goicam",
+    "height": 1.66
+  }
 ]
