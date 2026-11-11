@@ -59,7 +59,7 @@ let composer = null, bloom = null;
 if (!isMobile && !/[?&]nobloom/.test(location.search)) {
   composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.4, 0.45, 0.93);
+  bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.35, 0.4, 0.96);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 }
@@ -79,6 +79,18 @@ const serverNow = () => Date.now() + timeOffset;
 const players = new Map();   // id -> remote
 const customers = new Map(); // id -> {data, obj, label, key}
 
+// báo lỗi: hiện dòng đỏ nhỏ trên màn hình + gửi về server (xem trong Logs của Render) để dễ sửa
+const errSeen = new Set();
+function reportErr(e) {
+  const msg = String((e && (e.stack || e.message)) || e).split('\n').slice(0, 3).join(' | ').slice(0, 300);
+  if (errSeen.has(msg)) return; errSeen.add(msg);
+  try { socket.emit('clientError', msg); } catch (x) {}
+  let box = document.getElementById('errBox');
+  if (!box) { box = document.createElement('div'); box.id = 'errBox'; box.style.cssText = 'position:fixed;left:8px;bottom:60px;z-index:99;max-width:60vw;background:rgba(160,0,0,.85);color:#fff;font:11px monospace;padding:6px 8px;border-radius:8px;pointer-events:none'; document.body.appendChild(box); }
+  box.textContent = '⚠️ Lỗi: ' + msg;
+}
+addEventListener('error', (ev) => reportErr(ev.error || ev.message));
+addEventListener('unhandledrejection', (ev) => reportErr(ev.reason));
 const makeGirl = (a) => createModelGirl(a, createGirl(a));
 const home = buildHome(scene, world.colliders);
 // danh sách nhân vật 3D (Tripo) — tải xong thì cập nhật lại người đang dùng model
@@ -279,8 +291,7 @@ function updateMe(dt, t) {
   me.anim = anim;
   me.char.group.position.set(me.x, 0, me.z);
   me.char.group.rotation.y = me.ry;
-  me.char.animate(anim, t, moving, !!me.holding);
-  me.char.setHolding(me.holding);
+  try { me.char.animate(anim, t, moving, !!me.holding); me.char.setHolding(me.holding); } catch (e) { reportErr(e); }
   myLabel.sprite.position.set(me.x, ((me.char.topY || 1.6) + 0.2) * (app.height || 1), me.z);
   myLabel.sprite.visible = !cine;
 }
@@ -1146,7 +1157,7 @@ scene.add(torch); scene.add(torch.target);
 function setDark(on) {
   darkOn = on;
   world.setBlackout(on);
-  hemi.intensity = on ? 0.04 : 1.6; amb.intensity = on ? 0.02 : 0.35; sun.intensity = on ? 0 : 1.0;
+  hemi.intensity = on ? 0.04 : 1.1; amb.intensity = on ? 0.02 : 0.35; sun.intensity = on ? 0 : 1.0;
   torch.intensity = on ? 30 : 0;
   $('#darkOverlay').classList.toggle('hidden', !on);
 }
@@ -1808,6 +1819,9 @@ socket.on('space', ({ id, space }) => { const p = players.get(id); if (p) p.spac
 const clock = new THREE.Clock();
 function loop() {
   requestAnimationFrame(loop);
+  try { loopBody(); } catch (e) { reportErr(e); }
+}
+function loopBody() {
   const dt = Math.min(0.05, clock.getDelta());
   const t = clock.elapsedTime;
   updateMe(dt, t);
@@ -1819,8 +1833,7 @@ function loop() {
     const moving = Math.hypot(p.x - ox, p.z - oz) > 0.002 ? 1 : 0;
     p.char.group.position.set(p.x, 0, p.z); p.char.group.rotation.y = p.ry;
     const here = (p.space || '') === mySpace; p.char.group.visible = here; p.label.sprite.visible = here;
-    p.char.animate(p.anim === 'walk' && !moving ? 'idle' : p.anim, t, moving || (p.anim === 'walk' ? 1 : 0), !!p.holding);
-    p.char.setHolding(p.holding);
+    try { p.char.animate(p.anim === 'walk' && !moving ? 'idle' : p.anim, t, moving || (p.anim === 'walk' ? 1 : 0), !!p.holding); p.char.setHolding(p.holding); } catch (e) { reportErr(e); }
     setStars(p.id, p.anim === 'stun', p.x, p.z);
     if (p.anim === 'qchange' && p.lastAnim !== 'qchange') glitterAt(p.x, p.z);
     p.lastAnim = p.anim;

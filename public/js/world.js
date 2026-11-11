@@ -466,7 +466,7 @@ export function buildWorld(scene, opts = {}) {
   const loungeMat = velvet('#5c1a6b');
   lounge(-14.6, 6.4, Math.PI, loungeMat); lounge(-12.4, 6.4, Math.PI, loungeMat); sideTable(-13.5, 6.6);
   lounge(12.4, 6.4, Math.PI, loungeMat); lounge(14.6, 6.4, Math.PI, loungeMat); sideTable(13.5, 6.6);
-  const bigLights = [chandelier(0, 2.75, 1.2, 1.4, '#fff1d6', true)]; chandelier(-11, 2.75, 1.5, 0.9, '#ffd6ec'); chandelier(11, 2.75, 1.5, 0.9, '#d6f0ff');
+  const bigLights = [chandelier(0, 2.75, 1.2, 1.4, '#fff1d6', true)]; bigLights[0].intensity = 8; chandelier(-11, 2.75, 1.5, 0.9, '#ffd6ec'); chandelier(11, 2.75, 1.5, 0.9, '#d6f0ff');
 
   // ánh sáng sảnh
   const lobbyLights = [
