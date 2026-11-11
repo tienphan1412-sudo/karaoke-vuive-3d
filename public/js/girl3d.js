@@ -6,6 +6,10 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
 let manifest = [];
+let forceDefault = null; // bật "cả quán dùng 3D": ai chưa chọn nhân vật thì dùng nhân vật đầu tiên
+export function setForce3D(on) { forceDefault = on && manifest.length ? manifest[0].id : null; }
+export const forced3D = () => !!forceDefault;
+export const effectiveModel = (a) => (a && !a.uniform && (modelInfo(a.model) ? a.model : forceDefault)) || null;
 const cache = new Map(); // file -> Promise<gltf>
 const loader = new GLTFLoader();
 
@@ -195,7 +199,7 @@ export function createModelGirl(app, fallback) {
   function update(a) {
     current = a;
     fallback.update(a);
-    setModel(a.model && a.model !== 'none' && !a.uniform ? a.model : null); // mặc áo dài (công an) thì tạm về người khối
+    setModel(a.uniform ? null : modelInfo(a.model) ? a.model : forceDefault); // mặc áo dài (công an) thì tạm về người khối
     inner.scale.setScalar(a.height || 1);
   }
   function setHolding(kind) {

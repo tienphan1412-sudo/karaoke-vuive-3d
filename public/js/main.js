@@ -5,7 +5,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { buildHome, HOME, HOME_SPAWN, HOME_DOOR, SLOT_NAMES } from './home.js';
-import { createModelGirl, loadManifest, models as girlModels, modelInfo, preload as preloadModel } from './girl3d.js';
+import { createModelGirl, loadManifest, models as girlModels, modelInfo, preload as preloadModel, setForce3D, forced3D, effectiveModel } from './girl3d.js';
 import { createGirl, createCustomer, createNPC, createSlipper, makeLabel, roundRect } from './character.js';
 import { buildWorld, seatTransform, BAR, MIRROR, ROOM_DEFS, POLES, EXIT, BREAKER, SHOPSPOT } from './world.js';
 import { runMinigame, isMinigameOpen, getLastScore, setMgFeatures } from './minigames.js';
@@ -82,7 +82,13 @@ const customers = new Map(); // id -> {data, obj, label, key}
 const makeGirl = (a) => createModelGirl(a, createGirl(a));
 const home = buildHome(scene, world.colliders);
 // danh sách nhân vật 3D (Tripo) — tải xong thì cập nhật lại người đang dùng model
-loadManifest().then(() => { me.char.update(app); for (const p of players.values()) p.char.update({ ...DEFAULT, ...p.app }); if ($('#creator').classList.contains('show')) renderCreator(); });
+function refresh3D() {
+  setForce3D(!!FEAT.only3D);
+  me.char.update(app); for (const p of players.values()) p.char.update({ ...DEFAULT, ...p.app });
+  refreshStyleBadges();
+  if ($('#creator').classList.contains('show')) renderCreator();
+}
+loadManifest().then(refresh3D);
 const me = { char: makeGirl(app), x: 0, z: 3, ry: Math.PI, anim: 'idle', holding: null, emoteUntil: 0, emote: null, busy: false };
 scene.add(me.char.group);
 const myLabel = makeLabel(512, 96, 1);
@@ -544,7 +550,7 @@ function sfx(kind) {
 }
 
 // ================= HUD =================
-function styleOf(a) { const m = a.model && modelInfo(a.model); if (m && m.style) return m.style; return (D.OUTFITS.find((o) => o.id === a.outfit) || D.OUTFITS[0]).style; }
+function styleOf(a) { const m = modelInfo(effectiveModel(a)); if (m && m.style) return m.style; return (D.OUTFITS.find((o) => o.id === a.outfit) || D.OUTFITS[0]).style; }
 function refreshStyleBadges() {
   const s = styleOf(app);
   for (const el of [$('#styleBadge'), $('#myStyle')]) { el.className = 'badge ' + s; el.textContent = 'Phong cách: ' + D.STYLE_NAMES[s]; }
@@ -658,13 +664,17 @@ function setView(v) {
   document.querySelectorAll('.cr-view [data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
 }
 function renderCreator() {
-  $('.cr-tabs').innerHTML = CREATOR.map((t, i) => `<button class="${i === crTab ? 'on' : ''}" data-tab="${i}">${t.tab}</button>`).join('');
+  const only3D = forced3D();
+  const tabOk = (t) => !only3D || t.model || t.tab === 'Dáng người';
+  if (!tabOk(CREATOR[crTab])) crTab = 0;
+  $('.cr-tabs').innerHTML = CREATOR.map((t, i) => tabOk(t) ? `<button class="${i === crTab ? 'on' : ''}" data-tab="${i}">${t.tab}</button>` : '').join('');
   $('.cr-tabs').querySelectorAll('button').forEach((b) => b.onclick = () => {
     crTab = +b.dataset.tab; setView(CREATOR[crTab].face ? 'face' : 'full'); renderCreator();
   });
   const tab = CREATOR[crTab];
-  if (tab.model) tab.items[0].options = [{ id: 'none', name: '🧱 Người khối (tự makeup, thay đồ)', style: styleOf({ ...app, model: 'none' }) }, ...girlModels().map((m) => ({ id: m.id, name: '✨ ' + m.name, style: m.style }))];
-  const note = app.model && app.model !== 'none' && !tab.model ? '<div class="howto" style="margin:0 0 8px">Đang dùng nhân vật 3D nên phần này chỉ áp dụng cho người khối. Muốn tự makeup, vào tab ✨ chọn "Người khối".</div>' : '';
+  if (tab.model) tab.items[0].options = [...(only3D ? [] : [{ id: 'none', name: '🧱 Người khối (tự makeup, thay đồ)', style: D.OUTFITS.find((o) => o.id === app.outfit)?.style || 'goicam' }]), ...girlModels().map((m) => ({ id: m.id, name: '✨ ' + m.name, style: m.style }))];
+  if (tab.model && only3D && !modelInfo(app.model)) app = { ...app, model: effectiveModel(app) };
+  const note = !only3D && app.model && app.model !== 'none' && !tab.model ? '<div class="howto" style="margin:0 0 8px">Đang dùng nhân vật 3D nên phần này chỉ áp dụng cho người khối. Muốn tự makeup, vào tab ✨ chọn "Người khối".</div>' : '';
   $('.cr-body').innerHTML = note + tab.items.map((it) => {
     const v = app[it.key];
     let ctl = '';
@@ -752,6 +762,7 @@ function busy(on) { for (const id of ['#btnAuth', '#btnResume']) $(id).disabled 
 
 function afterLogin(r) {
   myName = r.name;
+  if (r.features) { FEAT = r.features; refresh3D(); }
   if (r.token) { auth = { name: r.name, token: r.token }; store.set('ktv_auth', auth); }
   initMusic();
   $('#start').classList.remove('show');
@@ -806,7 +817,7 @@ socket.on('kicked', (msg) => { joined = false; auth && store.set('ktv_auth', aut
 socket.on('init', (d) => {
   myId = d.you; joined = true;
   timeOffset = d.now - Date.now();
-  FEAT = d.features || {}; applyFeatures();
+  FEAT = d.features || {}; applyFeatures(); refresh3D();
   decorDefs = d.decor || {}; homeStyles = d.homeStyles || { wall: {}, floor: {} }; homeSlots = d.homeSlots || {}; myHome = d.myHome || null;
   shopDefs = d.shop || []; levelDefs = d.levels || []; owned = d.owned || []; myEarned = d.earned || 0; quests = d.quests || []; shiftEnd = d.shiftEnd || 0;
   myLevel = d.players[myId] ? d.players[myId].level : 0;
@@ -1408,7 +1419,8 @@ function quickChange() {
   let next = { outfit: others.length ? others[Math.floor(Math.random() * others.length)] : app.outfit, outfitColor: col[Math.floor(Math.random() * col.length)] };
   // có nhân vật 3D: đổi qua lại giữa các nhân vật 3D / người khối
   const ms = girlModels().map((m) => m.id);
-  if (app.model && app.model !== 'none') { const o2 = ms.filter((x) => x !== app.model); next = { model: o2.length ? o2[Math.floor(Math.random() * o2.length)] : 'none' }; }
+  const curM = effectiveModel(app);
+  if (curM) { const o2 = ms.filter((x) => x !== curM); next = { model: o2.length ? o2[Math.floor(Math.random() * o2.length)] : forced3D() ? curM : 'none' }; }
   else if (ms.length && Math.random() < 0.35) next = { model: ms[Math.floor(Math.random() * ms.length)] };
   if (next.model && next.model !== 'none') preloadModel(next.model);
   quickBusy = true;
