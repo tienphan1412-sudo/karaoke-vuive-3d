@@ -12,6 +12,8 @@ module.exports = {
   police: true,        // 🚔 Công an phường kiểm tra
   blackout: true,      // ⚡ Cúp điện
   karaoke: true,       // 🎤 Máy chấm điểm karaoke
+  // --- Nhân vật ---
+  only3D: true,        // ✨ Cả quán dùng nhân vật 3D (Tripo). false = cho chọn lại người khối tự makeup
   // --- Đợt 5 ---
   duet: false,         // 🎤 Song ca giữa 2 người chơi
   gift: false,         // 🎁 Tặng quà cho nhau

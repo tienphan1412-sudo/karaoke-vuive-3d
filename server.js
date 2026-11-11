@@ -13,6 +13,8 @@ app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders: (res, file) => { if (/\.(html|js|css)$/.test(file)) res.setHeader('Cache-Control', 'no-cache'); },
 }));
 app.use('/vendor/three', express.static(path.join(__dirname, 'node_modules', 'three')));
+// thư mục nhân vật 3D: nhận cả khi lỡ upload ra ngoài (models/girls ở thư mục gốc) thay vì public/models/girls
+app.use('/models', express.static(path.join(__dirname, 'models'), { setHeaders: (res, file) => { if (/\.json$/.test(file)) res.setHeader('Cache-Control', 'no-cache'); } }));
 app.get('/health', (req, res) => res.send('ok'));
 // danh sách file nhạc trong public/music
 app.get('/music-list', (req, res) => {
@@ -354,10 +356,31 @@ function progress(p, id, n = 1) {
   p.dirty = true;
   io.to(p.id).emit('quests', questsPub(p));
 }
+// nhân vật 3D (Tripo): đọc danh sách để biết phong cách (gợi cảm / ngoan hiền / lộng lẫy) của từng nhân vật
+function loadGirlModels() {
+  for (const f of [path.join(__dirname, 'public', 'models', 'girls', 'manifest.json'), path.join(__dirname, 'models', 'girls', 'manifest.json')]) {
+    try { const m = JSON.parse(fs.readFileSync(f, 'utf8')); if (Array.isArray(m)) return m; } catch (e) {}
+  }
+  return [];
+}
+const GIRL_MODELS = loadGirlModels();
+function modelOfApp(a) {
+  if (!GIRL_MODELS.length) return null;
+  const m = a && GIRL_MODELS.find((x) => x.id === a.model);
+  if (m) return m;
+  return F.only3D ? GIRL_MODELS[0] : null;
+}
+function styleOfApp(a) {
+  if (!a) return null;
+  if (a.uniform) return OUTFIT_STYLE.aodai;
+  const m = modelOfApp(a);
+  if (m && m.style) return m.style;
+  return OUTFIT_STYLE[a.outfit];
+}
 function tipFor(p, c, mult0 = 1) {
   const T = TYPES[c.type];
   let mult = mult0;
-  const st = OUTFIT_STYLE[p.app && (p.app.uniform ? 'aodai' : p.app.outfit)];
+  const st = styleOfApp(p.app);
   const liked = T.likes === 'any' ? null : st === T.likes;
   if (liked === true) mult *= 1.5;
   if (liked === false) mult *= 0.85;
@@ -610,7 +633,7 @@ io.on('connection', (socket) => {
     if (live) Object.assign(acc, live);
     socket.data.acc = acc;
     const token = withToken ? await store.addToken(acc) : null;
-    return { ok: true, name: acc.name, money: acc.money, served: acc.served || 0, app: acc.app, token, saveMode: store.mode };
+    return { ok: true, name: acc.name, money: acc.money, served: acc.served || 0, app: acc.app, token, saveMode: store.mode, features: F };
   }
   const NAME_RE = /^[\p{L}\p{N} _.-]{2,16}$/u;
   socket.on('register', async ({ name, pin } = {}, cb = () => {}) => {
