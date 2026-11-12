@@ -26,7 +26,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
+renderer.toneMappingExposure = 0.95;
 $('#game').appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#120818');
@@ -36,7 +36,7 @@ const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.03, 2
 { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); }
 const hemi = new THREE.HemisphereLight('#ffd6f0', '#2a1040', 1.1); scene.add(hemi);
 // đèn chiếu mặt: ánh trắng ấm đi theo camera, để da và mặt nhân vật không bị đèn neon nhuộm tím xanh
-const faceLight = new THREE.DirectionalLight('#fff1e6', 1.1); scene.add(faceLight); scene.add(faceLight.target);
+const faceLight = new THREE.DirectionalLight('#fff1e6', 0.8); scene.add(faceLight); scene.add(faceLight.target);
 const amb = new THREE.AmbientLight('#ffffff', 0.35); scene.add(amb);
 const sun = new THREE.DirectionalLight('#fff0f6', 1.0); sun.position.set(5, 10, 8); scene.add(sun);
 // màn hình dọc (điện thoại): mở rộng góc nhìn + lùi camera xa hơn, nhìn chéo từ trên cao để thấy được như máy tính
@@ -62,7 +62,7 @@ if (!isMobile && !/[?&]nobloom/.test(location.search)) {
   // khử răng cưa cho viền tóc/vai khi bật hiệu ứng tỏa sáng (nếu không, viền nhân vật bị lởm chởm)
   composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio(), { samples: 4, type: THREE.HalfFloatType }));
   composer.addPass(new RenderPass(scene, camera));
-  bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.35, 0.4, 0.96);
+  bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.2, 0.35, 0.98);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 }
@@ -1160,7 +1160,7 @@ scene.add(torch); scene.add(torch.target);
 function setDark(on) {
   darkOn = on;
   world.setBlackout(on);
-  hemi.intensity = on ? 0.04 : 1.1; faceLight.intensity = on ? 0 : 1.1; amb.intensity = on ? 0.02 : 0.35; sun.intensity = on ? 0 : 1.0;
+  hemi.intensity = on ? 0.04 : 1.1; faceLight.intensity = on ? 0 : 0.8; amb.intensity = on ? 0.02 : 0.35; sun.intensity = on ? 0 : 1.0;
   torch.intensity = on ? 30 : 0;
   $('#darkOverlay').classList.toggle('hidden', !on);
 }

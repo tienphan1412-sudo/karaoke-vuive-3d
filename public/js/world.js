@@ -255,7 +255,7 @@ export function buildWorld(scene, opts = {}) {
   ground.rotation.x = -Math.PI / 2; ground.position.y = -0.01; scene.add(ground);
   {
     const t = marbleTex('#1a0e20', '#a07cc0', '#c9a24a', 5); t.repeat.set(19, 7);
-    const lobby = new THREE.Mesh(new THREE.PlaneGeometry(38, 14), phys({ map: t, roughness: 0.32, metalness: 0.05, clearcoat: 0.8, clearcoatRoughness: 0.3 }));
+    const lobby = new THREE.Mesh(new THREE.PlaneGeometry(38, 14), phys({ map: t, roughness: 0.32, metalness: 0.05, clearcoat: 0.5, clearcoatRoughness: 0.45 }));
     lobby.rotation.x = -Math.PI / 2; lobby.position.set(0, 0, 1); scene.add(lobby);
     // thảm đỏ từ phòng VIP ra giữa sảnh
     const red = new THREE.MeshStandardMaterial({ map: carpetTex('#6d0f1f', '#e0b84f', '#ffd54f'), roughness: 0.95 });
@@ -386,7 +386,7 @@ export function buildWorld(scene, opts = {}) {
     chandelier(r.cx - 1.2, 2.55, r.cz + r.dir * 0.2, r.vip ? 0.9 : 0.6, '#fff0d0');
     if (r.vip) chandelier(r.cx + 3, 2.55, r.cz + r.dir * 0.2, 0.6, '#fff0d0');
     // đèn phòng
-    const light = new THREE.PointLight(r.color, 18, 16, 1.6);
+    const light = new THREE.PointLight(r.color, 12, 16, 1.6);
     light.position.set(r.cx, 2.6, r.cz); scene.add(light);
     roomLights.push({ light, base: new THREE.Color(r.color), r });
     // quả cầu disco (ẩn đến khi nâng cấp)
@@ -466,11 +466,11 @@ export function buildWorld(scene, opts = {}) {
   const loungeMat = velvet('#5c1a6b');
   lounge(-14.6, 6.4, Math.PI, loungeMat); lounge(-12.4, 6.4, Math.PI, loungeMat); sideTable(-13.5, 6.6);
   lounge(12.4, 6.4, Math.PI, loungeMat); lounge(14.6, 6.4, Math.PI, loungeMat); sideTable(13.5, 6.6);
-  const bigLights = [chandelier(0, 2.75, 1.2, 1.4, '#fff1d6', true)]; bigLights[0].intensity = 8; chandelier(-11, 2.75, 1.5, 0.9, '#ffd6ec'); chandelier(11, 2.75, 1.5, 0.9, '#d6f0ff');
+  const bigLights = [chandelier(0, 2.75, 1.2, 1.4, '#fff1d6', true)]; bigLights[0].intensity = 4.5; chandelier(-11, 2.75, 1.5, 0.9, '#ffd6ec'); chandelier(11, 2.75, 1.5, 0.9, '#d6f0ff');
 
   // ánh sáng sảnh
   const lobbyLights = [
-    new THREE.PointLight('#ff4fa3', 14, 18, 1.6), new THREE.PointLight('#40c4ff', 14, 18, 1.6),
+    new THREE.PointLight('#ff4fa3', 9, 18, 1.6), new THREE.PointLight('#40c4ff', 9, 18, 1.6),
   ];
   lobbyLights[0].position.set(-10, 3, 1); lobbyLights[1].position.set(10, 3, 1);
   lobbyLights.forEach((l) => scene.add(l));
@@ -488,7 +488,7 @@ export function buildWorld(scene, opts = {}) {
     pole.position.set(pl.x, 1.5, pl.z); scene.add(pole);
     const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.05, 16), gold); cap.position.set(pl.x, 2.97, pl.z); scene.add(cap);
     const capB = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.06, 16), gold); capB.position.set(pl.x, big ? 0.17 : 0.09, pl.z); scene.add(capB);
-    const spot = new THREE.PointLight('#ff7ac1', 5, 4, 2); spot.position.set(pl.x, 2.6, pl.z + 0.3); scene.add(spot); poleSpots.push(spot);
+    const spot = new THREE.PointLight('#ff7ac1', 2.5, 4, 2); spot.position.set(pl.x, 2.6, pl.z + 0.3); scene.add(spot); poleSpots.push(spot);
   }
   // ---------- cửa ra (tường trái) ----------
   box(0.12, 2.3, 1.6, new THREE.MeshStandardMaterial({ color: '#3e2418', roughness: 0.5 }), -18.88, 1.15, EXIT.z);
@@ -527,8 +527,8 @@ export function buildWorld(scene, opts = {}) {
       const { light, base } = roomLights[i];
       if (upgrades.disco) {
         light.color.setHSL(((t * 0.25 + i * 0.25) % 1), 0.9, 0.6);
-        light.intensity = 20 + Math.sin(t * 6 + i) * 6;
-      } else { light.color.copy(base); light.intensity = 18; }
+        light.intensity = 13 + Math.sin(t * 6 + i) * 4;
+      } else { light.color.copy(base); light.intensity = 12; }
       discoBalls[i].visible = !!upgrades.disco;
       discoBalls[i].rotation.y = t * 1.5;
     }

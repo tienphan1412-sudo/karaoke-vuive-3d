@@ -175,6 +175,15 @@ function classifyClip(name) {
   return null;
 }
 const clipCache = new Map(); // file -> {kind: [clip]}
+// kho cử động dùng chung: mọi nhân vật Tripo cùng một kiểu khung xương nên mượn cử động của nhau được
+// (nhân vật nào có cử động riêng trong file thì ưu tiên cử động riêng)
+const SHARED_ANIMS = ['anims-nu.glb', 'anims-muacot.glb'];
+let shared = null;
+function loadShared() {
+  if (!shared) shared = Promise.all(SHARED_ANIMS.map((f) => loadFile(f).then((g) => prepClips(f, g)).catch(() => ({}))))
+    .then((list) => { const out = {}; for (const c of list) for (const [k, v] of Object.entries(c)) (out[k] = out[k] || []).push(...v); return out; });
+  return shared;
+}
 function prepClips(file, gltf) {
   if (clipCache.has(file)) return clipCache.get(file);
   const out = {};
@@ -228,7 +237,10 @@ export function createModelGirl(app, fallback) {
     const holder = new THREE.Group(); holder.add(obj); inner.add(holder);
     rig = new Rig(obj);
     rightHand = rig.by.RightHand || null;
-    clips = prepClips(info.file, gltf);
+    const own = prepClips(info.file, gltf);
+    const lib = await loadShared();
+    if (modelId !== id) return;
+    clips = { ...lib, ...own };
     if (Object.keys(clips).length) mixer = new THREE.AnimationMixer(obj);
     fallback.group.visible = false;
   }
