@@ -9,7 +9,7 @@ let manifest = [];
 let forceDefault = null; // bật "cả quán dùng 3D": ai chưa chọn nhân vật thì dùng nhân vật đầu tiên
 export function setForce3D(on) { forceDefault = on && manifest.length ? manifest[0].id : null; }
 export const forced3D = () => !!forceDefault;
-export const effectiveModel = (a) => (a && !a.uniform && (modelInfo(a.model) ? a.model : forceDefault)) || null;
+export const effectiveModel = (a) => (a && (a.uniform ? (modelInfo('babai') ? 'babai' : null) : (modelInfo(a.model) ? a.model : forceDefault))) || null;
 const cache = new Map(); // file -> Promise<gltf>
 const loader = new GLTFLoader();
 
@@ -203,6 +203,39 @@ function prepClips(file, gltf) {
   return out;
 }
 
+// ======= sửa lỗi gắn khung của Tripo: tóc/vải sau lưng bị gắn nhầm vào xương cánh tay =======
+// (hạ tay xuống thì lọn tóc bị kéo xuyên qua bụng). Đỉnh nào nằm trong bề ngang thân người mà lại ăn theo
+// xương tay thì chuyển phần đó sang xương lưng. Bật bằng "fixArms": true trong manifest.
+function fixArmWeights(mesh) {
+  const g = mesh.geometry; if (!g || g.userData.armFixed) return 0; g.userData.armFixed = true;
+  const pos = g.attributes.position, SI = g.attributes.skinIndex, SW = g.attributes.skinWeight;
+  if (!pos || !SI || !SW) return 0;
+  const names = mesh.skeleton.bones.map((b) => short(b.name));
+  const spine = ['Spine1', 'Spine', 'Spine2'].map((n) => names.indexOf(n)).find((i) => i >= 0);
+  if (spine === undefined) return 0;
+  const isArm = (n) => /^(Left|Right)(Arm|ForeArm|Hand)/.test(n || '');
+  const box = new THREE.Box3().setFromBufferAttribute(pos);
+  const W = box.max.x - box.min.x, H = box.max.y - box.min.y, cx = (box.max.x + box.min.x) / 2;
+  const halfTorso = W * 0.11, shoulderY = box.min.y + H * 0.73; // chỉ từ dưới ngực trở xuống (vùng nách vẫn để tay kéo)
+  const get = (a, v) => [a.getX(v), a.getY(v), a.getZ(v), a.getW(v)];
+  let n = 0;
+  for (let v = 0; v < pos.count; v++) {
+    if (Math.abs(pos.getX(v) - cx) > halfTorso || pos.getY(v) > shoulderY) continue;
+    const I = get(SI, v), Wt = get(SW, v);
+    let moved = 0;
+    for (let k = 0; k < 4; k++) if (Wt[k] > 0 && isArm(names[I[k]])) { moved += Wt[k]; Wt[k] = 0; }
+    if (!moved) continue;
+    let slot = I.findIndex((b, k) => b === spine && Wt[k] > 0);
+    if (slot < 0) slot = Wt.findIndex((w) => w === 0);
+    if (slot < 0) continue;
+    I[slot] = spine; Wt[slot] += moved;
+    SI.setXYZW(v, ...I); SW.setXYZW(v, ...Wt); n++;
+  }
+  // thuộc tính có thể nằm chung bộ đệm (interleaved): báo cập nhật cho cả hai kiểu
+  for (const a of [SI, SW]) { if (a.isInterleavedBufferAttribute) a.data.needsUpdate = true; else a.needsUpdate = true; }
+  return n;
+}
+
 // ======= nhân vật 3D bọc ngoài (cùng giao diện với createGirl) =======
 // fallback: nhân vật người khối, hiện trong lúc chờ tải model (hoặc khi không có model)
 export function createModelGirl(app, fallback) {
@@ -225,6 +258,7 @@ export function createModelGirl(app, fallback) {
     let gltf; try { gltf = await my; } catch (e) { return; }
     if (loading !== my || modelId !== id) return;
     const obj = SkeletonUtils.clone(gltf.scene);
+    if (info.fixArms) obj.traverse((o) => { if (o.isSkinnedMesh) fixArmWeights(o); });
     obj.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = false; if (o.material) { o.material.envMapIntensity = 1.0; for (const k of ['map', 'normalMap']) if (o.material[k]) o.material[k].anisotropy = 8; } } });
     // chuẩn chiều cao + đặt chân chạm sàn
     obj.updateMatrixWorld(true);
@@ -247,7 +281,8 @@ export function createModelGirl(app, fallback) {
   function update(a) {
     current = a;
     fallback.update(a);
-    setModel(a.uniform ? null : modelInfo(a.model) ? a.model : forceDefault); // mặc áo dài (công an) thì tạm về người khối
+    // công an kiểm tra (uniform): đổi sang nhân vật 3D áo bà ba; chưa có thì mới về người khối mặc áo dài
+    setModel(a.uniform ? (modelInfo('babai') ? 'babai' : null) : modelInfo(a.model) ? a.model : forceDefault).catch((e) => { console.error('Lỗi nạp nhân vật 3D', e); dispatchEvent(new ErrorEvent('error', { error: e })); });
     inner.scale.setScalar(a.height || 1);
   }
   function setHolding(kind) {

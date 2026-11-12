@@ -39,7 +39,8 @@
   "name": "Bikini váy hoa đi biển",
   "file": "hoa.glb",
   "style": "goicam",
-  "height": 1.66
+  "height": 1.66,
+  "fixArms": true
  },
  {
   "id": "vang",

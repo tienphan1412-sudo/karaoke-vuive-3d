@@ -122,7 +122,7 @@ const QUESTS = {
   pole: { text: 'Múa cột được 4 sao', target: 1, reward: 250 },
   serve: { text: 'Phục vụ xong 5 khách', target: 5, reward: 300 },
   catch: { text: 'Bắt 1 khách quỵt tiền', target: 1, reward: 300 },
-  police: { text: 'Đổi áo dài kịp khi công an tới', target: 1, reward: 150 },
+  police: { text: 'Đổi áo bà ba kịp khi công an tới', target: 1, reward: 150 },
   sing100: { text: 'Hát được 100 điểm 2 lần', target: 2, reward: 150 },
   ghen: { text: 'Thoát nạn khi vợ khách đánh ghen', target: 1, reward: 200 },
   gift: { text: 'Tặng quà cho 1 bạn', target: 1, reward: 100 },
@@ -479,7 +479,7 @@ function tickGhen() {
 function startPolice() {
   police = { t0: now(), until: now() + 7000, ok: new Set() };
   io.emit('police', { t0: police.t0, until: police.until });
-  io.emit('feed', '🚔 CÔNG AN PHƯỜNG KIỂM TRA! Đổi áo dài gấp!');
+  io.emit('feed', '🚔 CÔNG AN PHƯỜNG KIỂM TRA! Đổi áo bà ba gấp!');
 }
 function tickPolice() {
   if (!police || now() < police.until) return;
@@ -859,7 +859,7 @@ io.on('connection', (socket) => {
     const p = me();
     if (!p || !police || now() > police.until || police.ok.has(p.id)) return;
     police.ok.add(p.id); progress(p, 'police');
-    socket.emit('toast', '👘 Đổi áo dài kịp rồi! Ngoan hiền quá 😇');
+    socket.emit('toast', '👚 Đổi áo bà ba kịp rồi! Ngoan hiền quá 😇');
   });
 
   // ---------- cầu dao ----------

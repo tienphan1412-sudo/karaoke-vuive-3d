@@ -255,7 +255,7 @@ export function buildWorld(scene, opts = {}) {
   ground.rotation.x = -Math.PI / 2; ground.position.y = -0.01; scene.add(ground);
   {
     const t = marbleTex('#1a0e20', '#a07cc0', '#c9a24a', 5); t.repeat.set(19, 7);
-    const lobby = new THREE.Mesh(new THREE.PlaneGeometry(38, 14), phys({ map: t, roughness: 0.32, metalness: 0.05, clearcoat: 0.5, clearcoatRoughness: 0.45 }));
+    const lobby = new THREE.Mesh(new THREE.PlaneGeometry(38, 14), phys({ map: t, roughness: 0.55, metalness: 0.05, clearcoat: 0.2, clearcoatRoughness: 0.6 }));
     lobby.rotation.x = -Math.PI / 2; lobby.position.set(0, 0, 1); scene.add(lobby);
     // thảm đỏ từ phòng VIP ra giữa sảnh
     const red = new THREE.MeshStandardMaterial({ map: carpetTex('#6d0f1f', '#e0b84f', '#ffd54f'), roughness: 0.95 });

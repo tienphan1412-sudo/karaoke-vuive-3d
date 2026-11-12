@@ -1868,7 +1868,9 @@ function loopBody() {
   updatePrompt();
   setZone(mySpace ? 'lobby' : zoneAt(me.x, me.z));
   sendMove(t);
-  faceLight.position.copy(camera.position).add(new THREE.Vector3(0, 1.2, 0)); faceLight.target.position.set(me.x, 1.2, me.z);
+  // đèn chiếu mặt: chiếu từ trên cao xuống chéo (không chiếu thẳng xuống sàn bóng gây lóa); tủ đồ dịu hơn
+  faceLight.position.copy(camera.position).add(new THREE.Vector3(0, 2.5, 0)); faceLight.target.position.set(me.x, 1.3, me.z);
+  if (!darkOn) faceLight.intensity = camMode === 'creator' ? 0.45 : 0.7;
   if (composer) composer.render(); else renderer.render(scene, camera);
   afterRender();
 }
