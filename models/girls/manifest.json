@@ -1,16 +1,72 @@
 [
-  {
-    "id": "hong",
-    "name": "Váy ôm hồng trễ vai",
-    "file": "hong.glb",
-    "style": "goicam",
-    "height": 1.66
-  },
-  {
-    "id": "bac",
-    "name": "Váy lụa bạc tóc bạch kim",
-    "file": "bac.glb",
-    "style": "goicam",
-    "height": 1.66
-  }
+ {
+  "id": "hong",
+  "name": "Váy ôm hồng trễ vai",
+  "file": "hong.glb",
+  "style": "goicam",
+  "height": 1.66
+ },
+ {
+  "id": "bac",
+  "name": "Váy lụa bạc tóc bạch kim",
+  "file": "bac.glb",
+  "style": "goicam",
+  "height": 1.66
+ },
+ {
+  "id": "do",
+  "name": "Đầm lụa đỏ xẻ đùi",
+  "file": "do.glb",
+  "style": "goicam",
+  "height": 1.66
+ },
+ {
+  "id": "den",
+  "name": "Đầm đen cut-out",
+  "file": "den.glb",
+  "style": "goicam",
+  "height": 1.66
+ },
+ {
+  "id": "ren",
+  "name": "Đầm ren đen tóc bạch kim",
+  "file": "ren.glb",
+  "style": "goicam",
+  "height": 1.66
+ },
+ {
+  "id": "hoa",
+  "name": "Bikini váy hoa đi biển",
+  "file": "hoa.glb",
+  "style": "goicam",
+  "height": 1.66
+ },
+ {
+  "id": "vang",
+  "name": "Đầm vàng vương miện",
+  "file": "vang.glb",
+  "style": "longlay",
+  "height": 1.66
+ },
+ {
+  "id": "xanh",
+  "name": "Đầm công chúa xanh",
+  "file": "xanh.glb",
+  "style": "longlay",
+  "height": 1.66
+ },
+ {
+  "id": "babai",
+  "name": "Áo bà ba trắng",
+  "file": "babai.glb",
+  "style": "ngoanhien",
+  "height": 1.66
+ },
+ {
+  "id": "cardigan",
+  "name": "Cardigan hồng váy xếp ly",
+  "file": "cardigan.glb",
+  "style": "ngoanhien",
+  "height": 1.66
+ }
 ]

@@ -45,6 +45,7 @@ class Rig {
     for (const b of this.bones) {
       const w = new THREE.Quaternion(); b.getWorldQuaternion(w); w.premultiply(rootInv);
       b.userData.restLocal = b.quaternion.clone();
+      b.userData.restPos = b.position.clone();
       b.userData.restW = w; // hướng lúc nghỉ, trong hệ tọa độ nhân vật
       b.userData.parentRestW = w.clone().multiply(b.quaternion.clone().invert());
       b.userData.D = new THREE.Quaternion();
@@ -63,6 +64,7 @@ class Rig {
       this.armSide = this.armSide || {}; this.armSide[s] = side;
     }
   }
+  resetPos() { for (const b of this.bones) b.position.copy(b.userData.restPos); }
   // pose: { TênXương: Quaternion (xoay thêm trong hệ trục nhân vật) }
   apply(pose) {
     for (const b of this.bones) {
@@ -161,6 +163,37 @@ function poseFor(rig, anim, t, moveAmt, holding) {
   return { P, bob, spin, lean };
 }
 
+// ======= cử động có sẵn trong file Tripo =======
+// tên clip -> loại cử động trong game. Clip nào không có thì game dùng cử động viết bằng code.
+function classifyClip(name) {
+  const n = name.toLowerCase();
+  if (n.includes('pole')) return 'pole';
+  if (n.includes('walk')) return 'walk';
+  if (n.includes('dance')) return 'dance';
+  if (n.includes('scared') || n.includes('cry') || n.includes('fall')) return 'stun';
+  if (n.includes('idle')) return 'idle';
+  return null;
+}
+const clipCache = new Map(); // file -> {kind: [clip]}
+function prepClips(file, gltf) {
+  if (clipCache.has(file)) return clipCache.get(file);
+  const out = {};
+  for (const c0 of gltf.animations || []) {
+    const kind = classifyClip(c0.name); if (!kind) continue;
+    const c = c0.clone();
+    // bỏ phần "đi tới" của hông (root motion): nhân vật đứng tại chỗ, game tự di chuyển
+    for (const tr of c.tracks) {
+      if (/Hips\.position$/.test(tr.name)) {
+        const v = tr.values, x0 = v[0], z0 = v[2];
+        for (let i = 0; i < v.length; i += 3) { v[i] = x0; v[i + 2] = z0; }
+      }
+    }
+    (out[kind] = out[kind] || []).push(c);
+  }
+  clipCache.set(file, out);
+  return out;
+}
+
 // ======= nhân vật 3D bọc ngoài (cùng giao diện với createGirl) =======
 // fallback: nhân vật người khối, hiện trong lúc chờ tải model (hoặc khi không có model)
 export function createModelGirl(app, fallback) {
@@ -169,12 +202,13 @@ export function createModelGirl(app, fallback) {
   fallback.group.position.set(0, 0, 0);
   const inner = new THREE.Group(); group.add(inner);
   let rig = null, modelId = null, loading = null, holdObj = null, rightHand = null;
+  let mixer = null, clips = {}, curKind = null, curAction = null, lastT = null;
   let current = app;
 
   async function setModel(id) {
     if (id === modelId) return;
     modelId = id;
-    inner.clear(); rig = null; rightHand = null;
+    inner.clear(); rig = null; rightHand = null; mixer = null; clips = {}; curKind = null; curAction = null;
     fallback.group.visible = true;
     const info = modelInfo(id);
     if (!info) return;
@@ -182,7 +216,7 @@ export function createModelGirl(app, fallback) {
     let gltf; try { gltf = await my; } catch (e) { return; }
     if (loading !== my || modelId !== id) return;
     const obj = SkeletonUtils.clone(gltf.scene);
-    obj.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = false; if (o.material) { o.material.envMapIntensity = 0.7; } } });
+    obj.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = false; if (o.material) { o.material.envMapIntensity = 1.0; for (const k of ['map', 'normalMap']) if (o.material[k]) o.material[k].anisotropy = 8; } } });
     // chuẩn chiều cao + đặt chân chạm sàn
     obj.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(obj, true);
@@ -194,6 +228,8 @@ export function createModelGirl(app, fallback) {
     const holder = new THREE.Group(); holder.add(obj); inner.add(holder);
     rig = new Rig(obj);
     rightHand = rig.by.RightHand || null;
+    clips = prepClips(info.file, gltf);
+    if (Object.keys(clips).length) mixer = new THREE.AnimationMixer(obj);
     fallback.group.visible = false;
   }
   function update(a) {
@@ -220,10 +256,25 @@ export function createModelGirl(app, fallback) {
   }
   function animate(anim, t, moveAmt, holding) {
     if (!rig) { fallback.animate(anim, t, moveAmt, holding); return; }
-    const { P, bob, spin } = poseFor(rig, anim, t, moveAmt, holding);
-    rig.apply(P);
-    inner.children[0].position.y = bob;
-    inner.children[0].rotation.y = spin;
+    const dt = lastT == null ? 0 : Math.min(0.1, Math.max(0, t - lastT)); lastT = t;
+    // dùng clip Tripo nếu có (bưng khay thì đi bằng code để tay giữ khay)
+    const useKind = mixer && clips[anim] && !(holding && anim === 'walk') ? anim : null;
+    if (useKind) {
+      if (curKind !== useKind) {
+        const list = clips[useKind], clip = list[Math.floor(Math.random() * list.length)];
+        const act = mixer.clipAction(clip); act.reset(); act.setLoop(THREE.LoopRepeat, Infinity);
+        if (curAction) { act.crossFadeFrom(curAction, 0.25, false); } else { mixer.stopAllAction(); }
+        act.play(); curAction = act; curKind = useKind;
+      }
+      mixer.update(dt);
+      inner.children[0].position.y = 0; inner.children[0].rotation.y = 0;
+    } else {
+      if (curKind) { mixer.stopAllAction(); curAction = null; curKind = null; rig.resetPos(); }
+      const { P, bob, spin } = poseFor(rig, anim, t, moveAmt, holding);
+      rig.apply(P);
+      inner.children[0].position.y = bob;
+      inner.children[0].rotation.y = spin;
+    }
     if (holdObj && rightHand) {
       const p = new THREE.Vector3(); rightHand.getWorldPosition(p); inner.worldToLocal(p);
       holdObj.position.set(p.x, p.y + 0.05, p.z + 0.06);
