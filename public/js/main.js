@@ -216,7 +216,7 @@ addEventListener('blur', () => keys.clear());
 
 // kéo để xoay camera
 let drag = null;
-renderer.domElement.addEventListener('pointerdown', (e) => { drag = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: 0 }; });
+renderer.domElement.addEventListener('pointerdown', (e) => { if (document.activeElement && document.activeElement.tagName === 'INPUT') document.activeElement.blur(); /* bấm vào cảnh thì thoát ô chat để phím tắt chạy lại */ drag = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: 0 }; });
 addEventListener('pointermove', (e) => {
   if (!drag || drag.id !== e.pointerId || camMode !== 'play') return;
   drag.moved += Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y);
@@ -408,7 +408,11 @@ function removeCustomerObj(id) {
 let near = null;
 function findNear() {
   for (const e of customers.values()) if (e.data.st === 'flee' && Math.hypot(e.obj.group.position.x - me.x, e.obj.group.position.z - me.z) < 2.2) return { type: 'flee', e };
-  if (darkOn && Math.hypot(BREAKER.x - me.x, BREAKER.z - me.z) < 2.5) return { type: 'breaker' };
+  if (darkOn && Math.hypot(BREAKER.x - me.x, BREAKER.z - me.z) < 2.5) {
+    // tới sát cầu dao là tự bật, không cần bấm E (tránh trường hợp con trỏ đang kẹt trong ô chat)
+    if (Math.hypot(BREAKER.x - me.x, BREAKER.z - me.z) < 1.8 && clock.elapsedTime - (window.__bkAt || 0) > 1.5) { window.__bkAt = clock.elapsedTime; socket.emit('breaker'); }
+    return { type: 'breaker' };
+  }
   if (FEAT.shop && Math.hypot(SHOPSPOT.x - me.x, SHOPSPOT.z - me.z) < 2) return { type: 'shop' };
   for (const pl of POLES) if (Math.hypot(pl.x - me.x, pl.z - me.z) < 1.3) return { type: 'pole', pole: pl };
   let best = null, bd = 3.1;

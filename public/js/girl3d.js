@@ -220,7 +220,9 @@ function fixArmWeights(mesh) {
   const get = (a, v) => [a.getX(v), a.getY(v), a.getZ(v), a.getW(v)];
   let n = 0;
   for (let v = 0; v < pos.count; v++) {
-    if (Math.abs(pos.getX(v) - cx) > halfTorso || pos.getY(v) > shoulderY) continue;
+    // ngang hông trở xuống thì tay ở xa (tư thế chữ A) nên lấy rộng hơn để gom cả vạt váy hai bên hông
+    const lim = pos.getY(v) < box.min.y + H * 0.6 ? W * 0.21 : halfTorso;
+    if (Math.abs(pos.getX(v) - cx) > lim || pos.getY(v) > shoulderY) continue;
     const I = get(SI, v), Wt = get(SW, v);
     let moved = 0;
     for (let k = 0; k < 4; k++) if (Wt[k] > 0 && isArm(names[I[k]])) { moved += Wt[k]; Wt[k] = 0; }
